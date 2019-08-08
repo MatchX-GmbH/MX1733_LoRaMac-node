@@ -14,9 +14,8 @@
 #include <util/list.h>
 #include "sw_version.h"
 
-#include "lmic/lmic.h"
-#include "lmic/hal.h"
 #include "ble.h"
+#include "lora/param.h"
 
 //#define DEBUG
 
@@ -63,7 +62,7 @@ static const dis_device_info_t	dis_info = {
 	.model_number	  = "MX1731",
 	.serial_number  = serial_number,
 	.hw_revision	  = "Rev.A",
-	.fw_revision	  = "1.0",
+	.fw_revision	  = "2.0",
 	.sw_revision	  = BLACKORCA_SW_VERSION,
 };
 
@@ -243,9 +242,9 @@ handle_evt_gap_pair_req(ble_evt_gap_pair_req_t *evt)
 static void
 ble_param_init(void)
 {
-	uint8_t	eui[8];
+	uint8_t	eui[6];
 
-	os_getDevEui(eui);
+	param_get(PARAM_DEV_EUI, eui, sizeof(eui));
 	if (snprintf(serial_number, sizeof(serial_number), "%05d",
 		    (eui[1] << 8) | eui[0]) >= (int)sizeof(serial_number)) {
 		return;

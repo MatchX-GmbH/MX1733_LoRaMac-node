@@ -6,7 +6,6 @@
 #include <hw_usb_charger.h>
 #include <sys_charger.h>
 
-#include "lmic/oslmic.h"
 #include "lora/ad_lora.h"
 #include "lora/util.h"
 #include "hw.h"
@@ -14,53 +13,54 @@
 
 PRIVILEGED_DATA static uint8_t	sys_status;
 
-#define LED_BATTERY_OK		0x00
-#define LED_BATTERY_LOW		0x01
-#define LED_BATTERY_CHARGING	0x02
-#define LED_BATTERY_CHARGED	0x03
+#define LED_BATTERY_OK        0x00
+#define LED_BATTERY_LOW       0x01
+#define LED_BATTERY_CHARGING  0x02
+#define LED_BATTERY_CHARGED   0x03
 
 PRIVILEGED_DATA static uint8_t	battery_status;
 
-#define LED_FUNC_MASK		0x07
-#define LED_OFF			0x00
-#define LED_BREATH		0x01
-#define LED_BLINK_NORMAL	0x02
-#define LED_BLINK_RARE		0x03
-#define LED_BLINK_FAST		0x04
-#define LED_BLINK_ALTERNATE	0x05
+#define LED_FUNC_MASK       0x07
+#define LED_OFF             0x00
+#define LED_BREATH          0x01
+#define LED_BLINK_NORMAL    0x02
+#define LED_BLINK_RARE      0x03
+#define LED_BLINK_FAST      0x04
+#define LED_BLINK_ALTERNATE 0x05
 
-#define LED_COLOUR_MASK		0x38
-#define LED_RED			0x08
-#define LED_GREEN		0x10
-#define LED_BLUE		0x20
-#define LED_YELLOW		(LED_RED | LED_GREEN)
+#define LED_COLOUR_MASK 0x38
+#define LED_RED         0x08
+#define LED_GREEN       0x10
+#define LED_BLUE        0x20
+#define LED_YELLOW      (LED_RED | LED_GREEN)
 
 PRIVILEGED_DATA static uint8_t	led_status;
+PRIVILEGED_DATA static OS_TIMER led_timer;
 
-#define NORMAL_BLINK_PERIOD	ms2osticks(250)
-#define FAST_BLINK_PERIOD	ms2osticks(50)
-#define RARE_BLINK_ON_PERIOD	ms2osticks(50)
-#define RARE_BLINK_OFF_PERIOD	sec2osticks(4)
-#define UPDATE_INTERVAL		sec2osticks(10)
+#define NORMAL_BLINK_PERIOD   OS_MS_2_TICKS(250)
+#define FAST_BLINK_PERIOD     OS_MS_2_TICKS(50)
+#define RARE_BLINK_ON_PERIOD  OS_MS_2_TICKS(50)
+#define RARE_BLINK_OFF_PERIOD OS_MS_2_TICKS(4 * 1000)
+#define UPDATE_INTERVAL       OS_MS_2_TICKS(10 * 1000)
 
 static const uint8_t	led_sys_stati[] = {
-	[LED_STATE_IDLE]		= LED_OFF,
+	[LED_STATE_IDLE] = LED_OFF,
 #ifdef FEATURE_LED_RGB
-	[LED_STATE_BOOTING]		= LED_BLUE   | LED_BLINK_NORMAL,
+	[LED_STATE_BOOTING] = LED_BLUE | LED_BLINK_NORMAL,
 #else
-	[LED_STATE_BOOTING]		= LED_YELLOW | LED_BLINK_NORMAL,
+	[LED_STATE_BOOTING] = LED_YELLOW | LED_BLINK_NORMAL,
 #endif
-	[LED_STATE_JOINING]		= LED_RED    | LED_BLINK_NORMAL,
-	[LED_STATE_SAMPLING_SENSOR]	= LED_YELLOW | LED_BLINK_ALTERNATE,
-	[LED_STATE_SENDING]		= LED_GREEN  | LED_BLINK_NORMAL,
-	[LED_STATE_REBOOTING]		= LED_RED    | LED_BLINK_FAST,
+	[LED_STATE_JOINING] = LED_RED | LED_BLINK_NORMAL,
+	[LED_STATE_SAMPLING_SENSOR] = LED_YELLOW | LED_BLINK_ALTERNATE,
+	[LED_STATE_SENDING] = LED_GREEN | LED_BLINK_NORMAL,
+	[LED_STATE_REBOOTING] = LED_RED | LED_BLINK_FAST,
 };
 
 static const uint8_t	led_battery_stati[] = {
-	[LED_BATTERY_OK]		= LED_OFF,
-	[LED_BATTERY_LOW]		= LED_RED   | LED_BLINK_RARE,
-	[LED_BATTERY_CHARGING]		= LED_RED   | LED_BREATH,
-	[LED_BATTERY_CHARGED]		= LED_GREEN | LED_BREATH,
+	[LED_BATTERY_OK] = LED_OFF,
+	[LED_BATTERY_LOW] = LED_RED | LED_BLINK_RARE,
+	[LED_BATTERY_CHARGING] = LED_RED | LED_BREATH,
+	[LED_BATTERY_CHARGED] = LED_GREEN | LED_BREATH,
 };
 
 #if defined FEATURE_LED_RGB
@@ -168,15 +168,14 @@ led_update_battery(void)
 }
 
 static void
-led_cb(osjob_t *job)
+led_cb(OS_TIMER timer)
 {
-	PRIVILEGED_DATA static osjob_t	led_job;
 	PRIVILEGED_DATA static bool	on;
-	ostime_t			delay = UPDATE_INTERVAL;
-	bool				red_inverted = false;
-	bool				updated;
+	uint32_t delay = UPDATE_INTERVAL;
+	bool red_inverted = false;
+	bool updated;
 
-	updated = led_update_battery() || !job;
+	updated = led_update_battery() || !timer;
 	switch (led_status & LED_FUNC_MASK) {
 	case LED_OFF:
 		on = false;
@@ -206,7 +205,9 @@ led_cb(osjob_t *job)
 	LED_ENABLE_RED((on ^ red_inverted) && !!(led_status & LED_RED));
 	LED_ENABLE_GREEN(on && !!(led_status & LED_GREEN));
 	LED_ENABLE_BLUE(on && !!(led_status & LED_BLUE));
-	os_setTimedCallback(&led_job, hal_ticks() + delay, led_cb);
+	OS_ASSERT(led_timer);
+	OS_TIMER_CHANGE_PERIOD(led_timer, delay, OS_TIMER_FOREVER);
+	OS_TIMER_START(led_timer, OS_TIMER_FOREVER);
 	if (on || red_inverted)
 		ad_lora_suspend_sleep(LORA_SUSPEND_LED, delay);
 	else
@@ -248,4 +249,12 @@ led_init(void)
 	hw_timer2_init(&t2cfg);
 	hw_breath_init(&bcfg);
 	led_conf_timers();
+
+	/* create timer for the leds */
+	if(led_timer == NULL){
+	  led_timer = OS_TIMER_CREATE("ledjob", NORMAL_BLINK_PERIOD,
+	    OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), led_cb);
+
+	  OS_ASSERT(led_timer);
+	}
 }

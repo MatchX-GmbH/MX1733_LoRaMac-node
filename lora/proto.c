@@ -1,9 +1,11 @@
 /* LoRa MatchX protocol */
 
-#include <stdint.h>
 #include <stdio.h>
-#include "hw/led.h"
-#include "lmic/lmic.h"
+#include <string.h>
+#include <stdint.h>
+
+#include "osal.h"
+
 #include "lora/lora.h"
 #include "lora/param.h"
 #include "lora/proto.h"
@@ -21,6 +23,8 @@
 #define LEN_MASK	0x0f
 
 #define LONG_LEN_MASK	0x3f
+
+#define MAX_LEN_PAYLOAD 64
 
 typedef enum {
 	INFO_PARAM		= 0x00,
@@ -79,7 +83,7 @@ set_tx_data(void)
 	printf("\r\n");
 #endif
 	if (total_len) {
-		LMIC_setTxData2(PORT, pend_tx_data, total_len, 0);
+	  lora_send(pend_tx_data, total_len);
 		status |= STATUS_TX_PENDING;
 	}
 }
@@ -187,10 +191,10 @@ void
 proto_send_data(void)
 {
 	PRIVILEGED_DATA static uint8_t	last_bat_level;
-	int				i;
-	char				buf[MAX_LEN_PAYLOAD];
-	size_t				len;
-	uint8_t				cur_bat_level;
+	int	i;
+	char buf[MAX_LEN_PAYLOAD];
+	size_t len;
+	uint8_t cur_bat_level;
 
 	cur_bat_level = bat_level();
 	if (cur_bat_level != last_bat_level) {

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <hw_gpio.h>
@@ -8,7 +9,6 @@
 #include "hw/hw.h"
 #include "hw/iox.h"
 #include "hw/cons.h"
-#include "lmic/lmic.h"
 #include "lora/ad_lora.h"
 #include "lora/lora.h"
 #include "lora/param.h"
@@ -122,11 +122,11 @@ cmd_param(int argc, char **argv)
 }
 
 static void
-sensor_cb(osjob_t *job)
+sensor_cb(OS_TIMER timer)
 {
   char  buf[16];
   size_t  i,j, len;
-  (void)job;
+  (void)timer;
 
   // Try to get all sensor data and print if any.
   for (i = 0; i < SENSOR_MAX; i++) {
@@ -143,12 +143,19 @@ sensor_cb(osjob_t *job)
 static void
 cmd_sense(int argc, char **argv)
 {
-	PRIVILEGED_DATA static osjob_t  sensor_job;
-	(void)argc;
-	(void)argv;
+  PRIVILEGED_DATA static OS_TIMER sensor_timer;
+  (void)argc;
+  (void)argv;
 
-	sensor_prepare();
-	os_setTimedCallback(&sensor_job, os_getTime() + sec2osticks(2), sensor_cb);
+  if(sensor_timer == NULL){
+    /* create timer for the sensors */
+    sensor_timer = OS_TIMER_CREATE("sensorprep", OS_MS_2_TICKS(2000),
+      OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), sensor_cb);
+
+    OS_ASSERT(sensor_timer);
+  }
+  sensor_prepare();
+  OS_TIMER_START(sensor_timer, OS_TIMER_FOREVER);
 }
 
 static void
@@ -298,7 +305,7 @@ cons_rx()
 			cons_ridx = r;
 		}
 	}
-	ad_lora_suspend_sleep(LORA_SUSPEND_CONSOLE, sec2osticks(2));
+	ad_lora_suspend_sleep(LORA_SUSPEND_CONSOLE, OS_MS_2_TICKS(2000));
 }
 
 static void
@@ -321,7 +328,8 @@ uart_isr()
 		}
 		if (!cons_pending) {
 			cons_pending = 1;
-			hal_uart_rx();
+			OS_TASK_NOTIFY_FROM_ISR(OS_GET_CURRENT_TASK(), \
+			  EVENT_NOTIF_CONS_RX, eSetBits);
 		}
 		break;
 	default:

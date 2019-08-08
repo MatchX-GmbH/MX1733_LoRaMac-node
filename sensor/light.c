@@ -1,12 +1,14 @@
 #include <stdint.h>
 #include <limits.h>
 
-#include "lmic/oslmic.h"
+#include "osal.h"
+
 #include "lora/util.h"
 #include "hw/hw.h"
 #include "hw/i2c.h"
 #include "light.h"
 
+//TODO: Implement light sensor with FreeRTOS!
 #ifdef FEATURE_SENSOR_LIGHT
 
 /*

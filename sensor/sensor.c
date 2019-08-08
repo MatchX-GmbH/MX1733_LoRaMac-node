@@ -1,8 +1,10 @@
 #include <sys/types.h>
 #include <FreeRTOS.h>
 #include <hw_gpio.h>
+
+#include "osal.h"
+
 #include "hw/hw.h"
-#include "lmic/oslmic.h"
 #include "lora/param.h"
 #include "lora/util.h"
 #include "gps.h"
@@ -10,9 +12,11 @@
 #include "sensor.h"
 #include "temp.h"
 
+#define sec2osticks(sec) OS_MS_2_TICKS(sec * 1000)
+
 #define DEFAULT_SENSOR_PERIOD	sec2osticks(60)
 
-static const ostime_t	sensor_periods[] = {
+static const uint32_t	sensor_periods[] = {
 	DEFAULT_SENSOR_PERIOD,
 	sec2osticks(10),
 	sec2osticks(30),
@@ -38,7 +42,7 @@ PRIVILEGED_DATA static uint8_t	sensor_type[SENSOR_MAX];
 struct sensor_callbacks {
 	void		(*init)(void);
 	void		(*prepare)(void);
-	ostime_t	(*data_ready)(void);
+	TickType_t	(*data_ready)(void);
 	int		(*read)(char *, int);
 	void		(*txstart)(void);
 };
@@ -110,10 +114,10 @@ sensor_prepare()
 	}
 }
 
-ostime_t
+uint32_t
 sensor_data_ready()
 {
-	ostime_t	t;
+  TickType_t	t;
 	int		i;
 
 	for (i = 0; i < SENSOR_MAX; i++) {
@@ -147,7 +151,7 @@ sensor_txstart(void)
 
 #endif /* FEATURE_SENSOR */
 
-ostime_t
+uint32_t
 sensor_period(void)
 {
 	uint8_t	idx = 0;

@@ -10,31 +10,32 @@ IMGTARGET=	$(OBJDIR)/$(PROJ).img
 MAPTARGET=	$(OBJDIR)/$(PROJ).map
 
 OBJS+=	$(OBJDIR)/main.o \
-	$(OBJDIR)/ble.o \
+	$(OBJDIR)/ble/ble.o \
 	$(OBJDIR)/hw/button.o \
 	$(OBJDIR)/hw/cons.o \
 	$(OBJDIR)/hw/i2c.o \
 	$(OBJDIR)/hw/iox.o \
 	$(OBJDIR)/hw/led.o \
 	$(OBJDIR)/hw/power.o \
+	$(OBJDIR)/lora/boards/sx1276-board.o \
+	$(OBJDIR)/lora/mac/LoRaMac.o \
+	$(OBJDIR)/lora/mac/LoRaMac-api-v3.o \
+	$(OBJDIR)/lora/mac/LoRaMacCrypto.o \
+	$(OBJDIR)/lora/radio/sx1276/sx1276.o \
+	$(OBJDIR)/lora/system/crypto/aes.o \
+	$(OBJDIR)/lora/system/crypto/cmac.o \
 	$(OBJDIR)/lora/ad_lora.o \
 	$(OBJDIR)/lora/lora.o \
 	$(OBJDIR)/lora/param.o \
 	$(OBJDIR)/lora/proto.o \
 	$(OBJDIR)/lora/upgrade.o \
-	$(OBJDIR)/sensor/accel.o \
+	$(OBJDIR)/lora/utilities.o \
 	$(OBJDIR)/sensor/bat.o \
 	$(OBJDIR)/sensor/gps.o \
 	$(OBJDIR)/sensor/light.o \
 	$(OBJDIR)/sensor/sensor.o \
 	$(OBJDIR)/sensor/temp.o \
 	$(OBJDIR)/strtonum.o
-
-OBJS+=	$(OBJDIR)/lmic/aes.o \
-	$(OBJDIR)/lmic/hal.o \
-	$(OBJDIR)/lmic/lmic.o \
-	$(OBJDIR)/lmic/oslmic.o \
-	$(OBJDIR)/lmic/radio.o
 
 OBJS+=	$(OBJDIR)/sdk/bsp/startup/config.o \
 	$(OBJDIR)/sdk/bsp/startup/startup_ARMCM0.o \
@@ -139,7 +140,9 @@ CFLAGS+=	-Ddg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A \
 		-Ddg_configBLACK_ORCA_IC_STEP=BLACK_ORCA_IC_STEP_E \
 		-DCONFIG_AT45DB011D=1 -DCONFIG_24LC256=1 -DCONFIG_FM75=1
 CFLAGS+=	-DRELEASE_BUILD
-CFLAGS+=	-I. -Ilmic \
+CFLAGS+=	-I. -Ilora -Ilora/boards -Ilora/mac \
+			-Ilora/radio -Ilora/radio/sx1276 \
+			-Ilora/system -Ilora/system/crypto \
 		-I$(SDKDIR)/sdk/bsp/include -I$(SDKDIR)/sdk/bsp/config \
 		-I$(SDKDIR)/sdk/bsp/peripherals/include \
 		-I$(SDKDIR)/sdk/bsp/memory/include \

@@ -3,46 +3,170 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "ble.h"
+#include "osal.h"
+#include "sys_watchdog.h"
+
+#include "board.h"
+#include "ble/ble.h"
+#include "hw/cons.h"
 #include "hw/hw.h"
 #include "hw/iox.h"
 #include "hw/led.h"
-#include "lmic/lmic.h"
 #include "lora/ad_lora.h"
 #include "lora/lora.h"
 #include "lora/param.h"
 #include "lora/proto.h"
 #include "lora/upgrade.h"
 #include "lora/util.h"
+#include "lora/mac/LoRaMac.h"
 #include "sensor/sensor.h"
+#include "sensor/bat.h"
 
 #define DEBUG
 #define DEBUG_TIME
-//#define HELLO
 //#define BLE_ALWAYS_ON
 
-/* State of the sampling/sending state machine */
-#define STATE_IDLE		0
-#define STATE_SAMPLING_SENSOR	1
-#define STATE_SENDING		2
-PRIVILEGED_DATA static uint8_t	state;
+#define MAX_SENSOR_SAMPLE_TIME	OS_MS_2_TICKS(2 * 1000)
+PRIVILEGED_DATA static TickType_t	sampling_since;
 
-/* Link status */
-#define STATUS_JOINED		0x01
-#define STATUS_LINK_UP		0x02
-PRIVILEGED_DATA static uint8_t	status;
-
-#define MAX_SENSOR_SAMPLE_TIME	sec2osticks(2)
-PRIVILEGED_DATA static ostime_t	sampling_since;
-
-#define JOIN_TIMEOUT		sec2osticks(2 * 60 * 60)
-#define REJOIN_TIMEOUT		sec2osticks(15 * 60)
-#define TX_TIMEOUT		sec2osticks(12)
-#define TX_PERIOD_TIMEOUT	sec2osticks(10 * 60)
-#define ALIVE_TX_PERIOD		sec2osticks(60)
-#define SEND_RETRY_TIME		sec2osticks(10)
+#define JOIN_TIMEOUT		  OS_MS_2_TICKS(2 * 60 * 60 * 1000)
+#define REJOIN_TIMEOUT		OS_MS_2_TICKS(15 * 60 * 1000)
+#define TX_TIMEOUT		    OS_MS_2_TICKS(12 * 1000)
+#define TX_PERIOD_TIMEOUT	OS_MS_2_TICKS(10 * 60 * 1000)
+#define ALIVE_TX_PERIOD		OS_MS_2_TICKS(60 * 1000)
+#define SEND_RETRY_TIME		OS_MS_2_TICKS(10 * 1000)
 
 #define MAX_RESETS		8
+
+/*!
+ * When set to 1 the application uses the Over-the-Air activation procedure
+ * When set to 0 the application uses the Personalization activation procedure
+ */
+#define OVER_THE_AIR_ACTIVATION                     1
+
+/*!
+ * Indicates if the end-device is to be connected to a private or public network
+ */
+#define LORAWAN_PUBLIC_NETWORK                      true
+
+/*!
+ * LoRaWAN Adaptive Data Rate
+ *
+ * \remark Please note that when ADR is enabled the end-device should be static
+ */
+#define LORAWAN_ADR_ON                              1
+
+#if defined( USE_BAND_868 )
+
+#include "LoRaMacTest.h"
+
+/*!
+ * LoRaWAN ETSI duty cycle control enable/disable
+ *
+ * \remark Please note that ETSI mandates duty cycled transmissions. Use only for test purposes
+ */
+#define LORAWAN_DUTYCYCLE_ON                        true
+
+#define USE_SEMTECH_DEFAULT_CHANNEL_LINEUP          1
+
+#if( USE_SEMTECH_DEFAULT_CHANNEL_LINEUP == 1 )
+
+#define LC4                { 867100000, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 }
+#define LC5                { 867300000, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 }
+#define LC6                { 867500000, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 }
+#define LC7                { 867700000, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 }
+#define LC8                { 867900000, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 }
+#define LC9                { 868800000, { ( ( DR_7 << 4 ) | DR_7 ) }, 2 }
+#define LC10               { 868300000, { ( ( DR_6 << 4 ) | DR_6 ) }, 1 }
+
+#endif
+
+#endif
+
+/*!
+ * LoRaWAN application port
+ */
+#define LORAWAN_APP_PORT                            2
+
+/*!
+ * User application data buffer size
+ */
+#if defined( USE_BAND_433 ) || defined( USE_BAND_780 ) || defined( USE_BAND_868 )
+
+#define LORAWAN_APP_DATA_SIZE                       16
+
+#elif defined( USE_BAND_915 ) || defined( USE_BAND_915_HYBRID )
+
+#define LORAWAN_APP_DATA_SIZE                       11
+
+#endif
+
+#if( OVER_THE_AIR_ACTIVATION == 0 )
+
+static uint8_t NwkSKey[] = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C };
+static uint8_t AppSKey[] = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C };
+
+/*!
+ * Device address
+ */
+static uint32_t DevAddr = ( uint32_t )0x00000000;
+
+#endif
+
+/*!
+ * Device states
+ */
+PRIVILEGED_DATA static enum eDevicState
+{
+    DEVICE_STATE_INIT,
+    DEVICE_STATE_JOIN,
+    DEVICE_STATE_PREPARE_TX,
+    DEVICE_STATE_SEND,
+    DEVICE_STATE_CYCLE,
+    DEVICE_STATE_SLEEP,
+}DeviceState;
+
+/*!
+ * LoRaWAN compliance tests support data
+ */
+PRIVILEGED_DATA struct ComplianceTest_s
+{
+    bool Running;
+    uint8_t State;
+    bool IsTxConfirmed;
+    uint8_t AppPort;
+    uint8_t AppDataSize;
+    uint8_t *AppDataBuffer;
+    uint16_t DownLinkCounter;
+    bool LinkCheck;
+    uint8_t DemodMargin;
+    uint8_t NbGateways;
+}ComplianceTest;
+
+PRIVILEGED_DATA static OS_TASK lora_task_handle;
+PRIVILEGED_DATA static OS_TIMER next_tx_timer;
+PRIVILEGED_DATA static OS_TIMER prepare_tx_timer;
+
+PRIVILEGED_DATA static DioIrqHandler **gp_irqHandlers;
+
+PRIVILEGED_DATA static spi_config  spi_conf= {
+  .cs_pad   = {
+    .port = HW_LORA_SPI_CS_PORT,
+    .pin  = HW_LORA_SPI_CS_PIN,
+  },
+  .word_mode      = HW_SPI_WORD_8BIT,
+  .smn_role       = HW_SPI_MODE_MASTER,
+  .polarity_mode  = HW_SPI_POL_LOW,
+  .phase_mode     = HW_SPI_PHA_MODE_0,
+  .mint_mode      = HW_SPI_MINT_DISABLE,
+  .xtal_freq      = HW_SPI_FREQ_DIV_8,
+  .fifo_mode      = HW_SPI_FIFO_RX_TX,
+};
+
+/*!
+ * Indicates if a new packet can be sent
+ */
+PRIVILEGED_DATA static bool NextTx = true;
 
 #ifdef DEBUG
 
@@ -50,329 +174,586 @@ PRIVILEGED_DATA static ostime_t	sampling_since;
 static void
 debug_time(void)
 {
-	uint32_t	now = os_getTime();
+	uint32_t	now = OS_GET_TICK_COUNT();
 
-	printf("%lu:%02lu.%03lu+%02lu ", osticks2ms(now) / 60000,
-	    osticks2ms(now) / 1000 % 60, osticks2ms(now) % 1000,
-	    now - ms2osticks(osticks2ms(now)));
+	printf("%lu:%02lu.%03lu+%02lu ", OS_TICKS_2_MS(now) / 60000,
+	  OS_TICKS_2_MS(now) / 1000 % 60, OS_TICKS_2_MS(now) % 1000,
+	    now - OS_MS_2_TICKS(OS_TICKS_2_MS(now)));
 }
 #else
 #define debug_time()
 #endif
 
-static void
-debug_event(int ev)
-{
-	static const char	*evnames[] = {
-		[EV_SCAN_TIMEOUT]	= "SCAN_TIMEOUT",
-		[EV_BEACON_FOUND]	= "BEACON_FOUND",
-		[EV_BEACON_MISSED]	= "BEACON_MISSED",
-		[EV_BEACON_TRACKED]	= "BEACON_TRACKED",
-		[EV_JOINING]		= "JOINING",
-		[EV_JOINED]		= "JOINED",
-		[EV_RFU1]		= "RFU1",
-		[EV_JOIN_FAILED]	= "JOIN_FAILED",
-		[EV_REJOIN_FAILED]	= "REJOIN_FAILED",
-		[EV_TXCOMPLETE]		= "TXCOMPLETE",
-		[EV_LOST_TSYNC]		= "LOST_TSYNC",
-		[EV_RESET]		= "RESET",
-		[EV_RXCOMPLETE]		= "RXCOMPLETE",
-		[EV_LINK_DEAD]		= "LINK_DEAD",
-		[EV_LINK_ALIVE]		= "LINK_ALIVE",
-		[EV_SCAN_FOUND]		= "SCAN_FOUND",
-		[EV_TXSTART]		= "TXSTART",
-	};
-
-	debug_time();
-	printf("%s\r\n",
-	    ev < (int)ARRAY_SIZE(evnames) ? evnames[ev] : "UNKNOWN");
-}
-#else /* !DEBUG */
-#define debug_event(ev)
-#endif /* DEBUG */
-
-#ifdef HW_IOX_I2C_ADDR
-
-#define PIN_BIT0_0	0x0f
-#define PIN_BIT0_IN	0x0d
-#define PIN_BIT0_1	0x0b
-
-#define PIN_BIT1_0	0x0e
-#define PIN_BIT1_IN	0x0c
-#define PIN_BIT1_1	0x0a
-
-#define PIN_BIT2_0	0x09
-#define PIN_BIT2_IN	0x07
-#define PIN_BIT2_1	0x05
-
-#define PIN_BIT3_0	0x08
-#define PIN_BIT3_IN	0x06
-#define PIN_BIT3_1	0x04
-
-#define PINS_INPUT	((1<<PIN_BIT0_IN) | (1<<PIN_BIT1_IN) | \
-			 (1<<PIN_BIT2_IN) | (1<<PIN_BIT3_IN))
-#define PINS_ONES	((1<<PIN_BIT0_1) | (1<<PIN_BIT1_1) | \
-			 (1<<PIN_BIT2_1) | (1<<PIN_BIT3_1))
-#define PINS_NOTCONF	((1<<0x00) | (1<<0x01) | (1<<0x02) | (1<<0x03))
-
-static uint8_t
-lora_autodetect_region(void)
-{
-	int	pins;
-	uint8_t	region;
-
-	if (iox_setconf(PINS_INPUT | PINS_NOTCONF)) {
-#ifdef DEBUG
-		printf("IOX: cannot set configuration\r\n");
 #endif
-		return 0xff;
-	}
-	if (iox_setpins(PINS_ONES)) {
-#ifdef DEBUG
-		printf("IOX: cannot set pins\r\n");
+
+void
+lora_send(uint8_t *data, size_t len)
+{
+  McpsReq_t mcpsReq;
+  LoRaMacTxInfo_t txInfo;
+
+  if(LoRaMacQueryTxPossible(len, &txInfo) != LORAMAC_STATUS_OK)
+  {
+    // Send empty frame in order to flush MAC commands
+    mcpsReq.Type = MCPS_UNCONFIRMED;
+    mcpsReq.Req.Unconfirmed.fBuffer = NULL;
+    mcpsReq.Req.Unconfirmed.fBufferSize = 0;
+    mcpsReq.Req.Unconfirmed.Datarate = DR_0;
+  }
+  else
+  {
+    if( ComplianceTest.IsTxConfirmed == false )
+    {
+      mcpsReq.Type = MCPS_UNCONFIRMED;
+      mcpsReq.Req.Unconfirmed.fPort = 1;
+      mcpsReq.Req.Unconfirmed.fBuffer = data;
+      mcpsReq.Req.Unconfirmed.fBufferSize = len;
+      mcpsReq.Req.Unconfirmed.Datarate = DR_0;
+    }
+    else
+    {
+      mcpsReq.Type = MCPS_CONFIRMED;
+      mcpsReq.Req.Confirmed.fPort = 1;
+      mcpsReq.Req.Confirmed.fBuffer = data;
+      mcpsReq.Req.Confirmed.fBufferSize = len;
+      mcpsReq.Req.Confirmed.NbTrials = 8;
+      mcpsReq.Req.Confirmed.Datarate = DR_0;
+    }
+  }
+
+  if(LoRaMacMcpsRequest(&mcpsReq) == LORAMAC_STATUS_OK)
+  {
+    NextTx = false;
+  }else{
+    NextTx = true;
+  }
+}
+
+/*!
+ * \brief Function executed on next_tx_timer Timeout event
+ */
+static void next_tx_cb(OS_TIMER timer)
+{
+  MibRequestConfirm_t mibReq;
+  LoRaMacStatus_t status;
+
+  OS_TIMER_STOP_FROM_ISR(timer);
+
+  mibReq.Type = MIB_NETWORK_JOINED;
+  status = LoRaMacMibGetRequestConfirm( &mibReq );
+
+  if( status == LORAMAC_STATUS_OK )
+  {
+    if( mibReq.Param.IsNetworkJoined == true )
+    {
+      DeviceState = DEVICE_STATE_SEND;
+      NextTx = true;
+    }
+    else
+    {
+      DeviceState = DEVICE_STATE_JOIN;
+    }
+  }
+}
+
+/*!
+ * \brief Function executed on next_tx_timer Timeout event
+ */
+static void lora_tx_ready_cb(OS_TIMER timer)
+{
+  TickType_t delay;
+  if (OS_GET_TICK_COUNT() < (sampling_since + MAX_SENSOR_SAMPLE_TIME) && \
+      (delay = sensor_data_ready()) != 0) {
+    OS_TIMER_START(timer, OS_TIMER_FOREVER);
+    ad_lora_suspend_sleep(LORA_SUSPEND_LORA, delay);
+  } else {
+    DeviceState = DEVICE_STATE_SEND;
+  }
+}
+
+/*!
+ * \brief   MCPS-Confirm event function
+ *
+ * \param   [IN] mcpsConfirm - Pointer to the confirm structure,
+ *               containing confirm attributes.
+ */
+static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
+{
+  if( mcpsConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK )
+  {
+    switch( mcpsConfirm->McpsRequest )
+    {
+      case MCPS_UNCONFIRMED:
+      {
+        // Check Datarate
+        // Check TxPower
+        break;
+      }
+      case MCPS_CONFIRMED:
+      {
+        // Check Datarate
+        // Check TxPower
+        // Check AckReceived
+        // Check NbTrials
+        break;
+      }
+      case MCPS_PROPRIETARY:
+      {
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  NextTx = true;
+}
+
+/*!
+ * \brief   MCPS-Indication event function
+ *
+ * \param   [IN] mcpsIndication - Pointer to the indication structure,
+ *               containing indication attributes.
+ */
+static void McpsIndication( McpsIndication_t *mcpsIndication )
+{
+  if( mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK )
+  {
+      return;
+  }
+
+  switch( mcpsIndication->McpsIndication )
+  {
+      case MCPS_UNCONFIRMED:
+      {
+          break;
+      }
+      case MCPS_CONFIRMED:
+      {
+          break;
+      }
+      case MCPS_PROPRIETARY:
+      {
+          break;
+      }
+      case MCPS_MULTICAST:
+      {
+          break;
+      }
+      default:
+          break;
+  }
+
+  // Check Multicast
+  // Check Port
+  // Check Datarate
+  // Check FramePending
+  // Check Buffer
+  // Check BufferSize
+  // Check Rssi
+  // Check Snr
+  // Check RxSlot
+
+  if( ComplianceTest.Running == true )
+  {
+      ComplianceTest.DownLinkCounter++;
+  }
+
+  if( mcpsIndication->RxData == true )
+  {
+    switch( mcpsIndication->Port )
+    {
+    case 1:
+    case 2:
+      break;
+    case 224:
+      if( ComplianceTest.Running == false )
+      {
+        // Check compliance test enable command (i)
+        if( ( mcpsIndication->BufferSize == 4 ) &&
+            ( mcpsIndication->Buffer[0] == 0x01 ) &&
+            ( mcpsIndication->Buffer[1] == 0x01 ) &&
+            ( mcpsIndication->Buffer[2] == 0x01 ) &&
+            ( mcpsIndication->Buffer[3] == 0x01 ) )
+        {
+          ComplianceTest.IsTxConfirmed = false;
+          ComplianceTest.AppPort = 224;
+          ComplianceTest.AppDataSize = 2;
+          ComplianceTest.DownLinkCounter = 0;
+          ComplianceTest.LinkCheck = false;
+          ComplianceTest.DemodMargin = 0;
+          ComplianceTest.NbGateways = 0;
+          ComplianceTest.Running = true;
+          ComplianceTest.State = 1;
+
+          MibRequestConfirm_t mibReq;
+          mibReq.Type = MIB_ADR;
+          mibReq.Param.AdrEnable = true;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+#if defined( USE_BAND_868 )
+          LoRaMacTestSetDutyCycleOn( false );
 #endif
-		return 0xff;
-	}
-	if ((pins = iox_getpins()) == -1) {
-#ifdef DEBUG
-		printf("IOX: cannot get pins\r\n");
+        }
+      }
+      else
+      {
+        ComplianceTest.State = mcpsIndication->Buffer[0];
+        switch( ComplianceTest.State )
+        {
+        case 0: // Check compliance test disable command (ii)
+          ComplianceTest.IsTxConfirmed = false;
+          ComplianceTest.AppPort = LORAWAN_APP_PORT;
+          ComplianceTest.AppDataSize = LORAWAN_APP_DATA_SIZE;
+          ComplianceTest.DownLinkCounter = 0;
+          ComplianceTest.Running = false;
+
+          MibRequestConfirm_t mibReq;
+          mibReq.Type = MIB_ADR;
+          mibReq.Param.AdrEnable = LORAWAN_ADR_ON;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+#if defined( USE_BAND_868 )
+          LoRaMacTestSetDutyCycleOn( LORAWAN_DUTYCYCLE_ON );
 #endif
-		return 0xff;
-	}
-	region = 0;
-	if (pins & (1 << PIN_BIT0_IN))
-		region |= 0x01;
-	if (pins & (1 << PIN_BIT1_IN))
-		region |= 0x02;
-	if (pins & (1 << PIN_BIT2_IN))
-		region |= REGION_WIDEBAND;
-	if (pins & (1 << PIN_BIT3_IN))
-		region |= REGION_FULL;
-	return region;
+          break;
+        case 1: // (iii, iv)
+          ComplianceTest.AppDataSize = 2;
+          break;
+        case 2: // Enable confirmed messages (v)
+          ComplianceTest.IsTxConfirmed = true;
+          ComplianceTest.State = 1;
+          break;
+        case 3:  // Disable confirmed messages (vi)
+          ComplianceTest.IsTxConfirmed = false;
+          ComplianceTest.State = 1;
+          break;
+        case 4: // (vii)
+          ComplianceTest.AppDataSize = mcpsIndication->BufferSize;
+
+//          AppData[0] = 4;
+//          for( uint8_t i = 1; i < AppDataSize; i++ )
+//          {
+//              AppData[i] = mcpsIndication->Buffer[i] + 1;
+//          }
+          break;
+        case 5: // (viii)
+            {
+              MlmeReq_t mlmeReq;
+              mlmeReq.Type = MLME_LINK_CHECK;
+              LoRaMacMlmeRequest( &mlmeReq );
+            }
+            break;
+        case 6: // (ix)
+            {
+              MlmeReq_t mlmeReq;
+
+              mlmeReq.Type = MLME_JOIN;
+
+              mlmeReq.Req.Join.DevEui = param_get_addr(PARAM_DEV_EUI);
+              mlmeReq.Req.Join.AppEui = param_get_addr(PARAM_APP_EUI);
+              mlmeReq.Req.Join.AppKey = param_get_addr(PARAM_DEV_KEY);
+
+              LoRaMacMlmeRequest( &mlmeReq );
+              DeviceState = DEVICE_STATE_SLEEP;
+            }
+            break;
+        default:
+            break;
+        }
+      }
+      break;
+    default:
+      break;
+    }
+  }
 }
 
-#else /* !HW_IOX_I2C_ADDR */
-
-#define lora_autodetect_region()	REGION_EU
-
-#endif /* HW_IOX_I2C_ADDR */
-
-static uint8_t
-lora_get_region(void)
+/*!
+ * \brief   MLME-Confirm event function
+ *
+ * \param   [IN] mlmeConfirm - Pointer to the confirm structure,
+ *               containing confirm attributes.
+ */
+static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
 {
-	uint8_t	region;
-
-	param_get(PARAM_LORA_REGION, &region, sizeof(region));
-	if (region == 0xff)
-		region = lora_autodetect_region();
-#ifdef DEBUG
-	printf("region %02x\r\n", region);
-#endif
-	return region;
-}
-
-static void
-lora_start_joining(osjob_t *job)
-{
-	if (!cm_lp_clk_is_avail()) {
-		os_setTimedCallback(job, os_getTime() + sec2osticks(1),
-		    lora_start_joining);
-		return;
-	}
-	LMIC_startJoining();
-}
-
-static void
-lora_reset(osjob_t *job)
-{
-	PRIVILEGED_DATA static uint8_t	reset_count;
-
-#ifdef DEBUG
-	debug_time();
-	printf("lora reset #%d\r\n", reset_count);
-#endif
-	if (++reset_count > MAX_RESETS)
-		hal_failed();
-	status = 0;
-	if (LMIC_reset(lora_get_region()) == -1)
-		return;
-	os_setCallback(job, lora_start_joining);
-}
-
-static void
-lora_reset_after(ostime_t delay)
-{
-	PRIVILEGED_DATA static osjob_t	reset_job;
-
-	os_setTimedCallback(&reset_job, os_getTime() + delay, lora_reset);
-}
-
-#define lora_init()	lora_reset_after(sec2osticks(1))
-#define lora_reinit()	lora_reset_after(0)
-
-static void	lora_send_init(osjob_t *job);
-
-static void
-lora_schedule_next_send(osjob_t *job, ostime_t delay)
-{
-	os_setTimedCallback(job, os_getTime() + delay + os_getRndU2(),
-	    lora_send_init);
-}
-
-static void
-lora_send_wait(osjob_t *job)
-{
-	ostime_t	delay;
-
-	if (os_getTime() < sampling_since + MAX_SENSOR_SAMPLE_TIME &&
-	    (delay = sensor_data_ready()) != 0) {
-		os_setTimedCallback(job, os_getTime() + delay,
-		    lora_send_wait);
-		ad_lora_suspend_sleep(LORA_SUSPEND_LORA, delay + 64);
-	} else {
-		state = STATE_IDLE;
-		led_notify(LED_STATE_IDLE);
-		proto_send_data();
-		lora_schedule_next_send(job, sensor_period());
-	}
+  if( mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK )
+  {
+    switch( mlmeConfirm->MlmeRequest )
+    {
+      case MLME_JOIN:
+      {
+        // Status is OK, node has joined the network
+        DeviceState = DEVICE_STATE_PREPARE_TX;
+        NextTx = true;
+        break;
+      }
+      case MLME_LINK_CHECK:
+      {
+        // Check DemodMargin
+        // Check NbGateways
+        if( ComplianceTest.Running == true )
+        {
+            ComplianceTest.LinkCheck = true;
+            ComplianceTest.DemodMargin = mlmeConfirm->DemodMargin;
+            ComplianceTest.NbGateways = mlmeConfirm->NbGateways;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  NextTx = true;
 }
 
 static void
-lora_send_init(osjob_t *job)
+lora_wkup_int_cb(void)
 {
-#ifdef DEBUG
-	debug_time();
-	printf("lora_send_init: state %d\r\n", state);
-#endif
-	switch (state) {
-	case STATE_IDLE:
-		if (status & STATUS_LINK_UP) {
-			state = STATE_SAMPLING_SENSOR;
-			sampling_since = os_getTime();
-			led_notify(LED_STATE_SAMPLING_SENSOR);
-			sensor_prepare();
-			lora_send_wait(job);
-			return;
-		} else if (status & STATUS_JOINED) {
-			LMIC_sendAlive();
-		}
-		lora_schedule_next_send(job, ALIVE_TX_PERIOD);
-		break;
-	case STATE_SAMPLING_SENSOR:
-		break;
-	case STATE_SENDING:
-		lora_schedule_next_send(job, SEND_RETRY_TIME);
-		break;
-	}
+  //TODO: Implement wakeup notifications.
+  hw_wkup_reset_interrupt();
 }
 
 void
-lora_send(void)
+lora_hw_init(void *irq)
 {
-	PRIVILEGED_DATA static osjob_t	sensor_job;
+  SX1276IoInit();
 
-	lora_send_init(&sensor_job);
-}
+  hw_gpio_configure_pin(HW_LORA_REST_PORT, HW_LORA_REST_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, true);
+  hw_gpio_set_pin_function(HW_LORA_SPI_CLK_PORT, HW_LORA_SPI_CLK_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_CLK);
+  hw_gpio_set_pin_function(HW_LORA_SPI_DI_PORT, HW_LORA_SPI_DI_PIN,
+    HW_GPIO_MODE_INPUT, HW_LORA_GPIO_FUNC_SPI_DI);
+  hw_gpio_set_pin_function(HW_LORA_SPI_DO_PORT, HW_LORA_SPI_DO_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_DO);
 
-void
-onEvent(ev_t ev)
-{
-	debug_event(ev);
-	switch(ev) {
-	case EV_LINK_DEAD:
-		status &= ~STATUS_LINK_UP;
-		lora_send();
-		/* NO BREAK FALLTHROUGH */
-	case EV_JOINING:
-		state = STATE_IDLE;
-		led_notify(LED_STATE_JOINING);
-		lora_reset_after(JOIN_TIMEOUT);
-		break;
-	case EV_JOINED:
-#ifdef DEBUG
-		printf("netid = %06lx\r\n", LMIC.netid);
+#ifdef FEATURE_USER_BUTTON
+  hw_gpio_set_pin_function(HW_USER_BTN_PORT, HW_USER_BTN_PIN,
+    HW_GPIO_MODE_INPUT, HW_GPIO_FUNC_GPIO);
 #endif
-		/* NO BREAK FALLTHROUGH */
-	case EV_LINK_ALIVE:
-		status |= STATUS_JOINED | STATUS_LINK_UP;
-		state = STATE_IDLE;
-		lora_reset_after(TX_PERIOD_TIMEOUT);
-		lora_send();
-		break;
-	case EV_JOIN_FAILED:
-		lora_reinit();
-		break;
-	case EV_REJOIN_FAILED:
-		lora_reset_after(REJOIN_TIMEOUT);
-		ad_lora_allow_sleep(LORA_SUSPEND_LORA);
-		break;
-	case EV_TXSTART:
-		ad_lora_suspend_sleep(LORA_SUSPEND_LORA, TX_TIMEOUT);
-		proto_txstart();
-		if (status & STATUS_LINK_UP) {
-			state = STATE_SENDING;
-			led_notify(LED_STATE_SENDING);
-			lora_reset_after(TX_TIMEOUT);
-		} else {
-			led_notify(LED_STATE_JOINING);
-		}
-		break;
-	case EV_TXCOMPLETE:
-		if (status & STATUS_LINK_UP) {
-			ostime_t	delay;
+  hw_spi_init(HW_LORA_SPI, &spi_conf);
 
-			delay = sensor_period() + sec2osticks(5);
-			if (delay < TX_PERIOD_TIMEOUT)
-				delay = TX_PERIOD_TIMEOUT;
-			lora_reset_after(delay);
-			led_notify(LED_STATE_IDLE);
-		}
-		if (LMIC.dataLen != 0) {
-			proto_handle(LMIC.frame[LMIC.dataBeg - 1],
-			    LMIC.frame + LMIC.dataBeg, LMIC.dataLen);
-		}
-		state = STATE_IDLE;
-		ad_lora_allow_sleep(LORA_SUSPEND_LORA);
-		break;
-	default:
-		break;
-	}
-}
+  SX1276.Spi.spi_conf = &spi_conf;
 
-#ifdef HELLO
-static void
-say_hi(osjob_t *job)
-{
-	PRIVILEGED_DATA static int	n;
-	char				buf[64];
-
-	os_setTimedCallback(job, os_getTime() + sec2osticks(1), say_hi);
-	printf("Hello #%u @ %u (%ld)\r\n", n++, os_getTimeSecs(), os_getTime());
-}
+  hw_wkup_init(NULL);
+  hw_wkup_set_counter_threshold(1);
+  hw_wkup_configure_pin(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN, true,
+    HW_WKUP_PIN_STATE_HIGH);
+  hw_wkup_configure_pin(HW_LORA_DIO1_PORT, HW_LORA_DIO1_PIN, true,
+    HW_WKUP_PIN_STATE_HIGH);
+  hw_wkup_configure_pin(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN, true,
+    HW_WKUP_PIN_STATE_HIGH);
+#ifdef FEATURE_USER_BUTTON
+  hw_wkup_configure_pin(HW_USER_BTN_PORT, HW_USER_BTN_PIN, true,
+    HW_USER_BTN_ACTIVE);
 #endif
+  hw_wkup_register_interrupt(lora_wkup_int_cb, 1);
+
+  gp_irqHandlers = irq;
+}
 
 void
 lora_task_func(void *param)
 {
-#ifdef HELLO
-	osjob_t	hello_job;
-#endif
+  int8_t wdog_id;
 	(void)param;
 	param_init();
 	ad_lora_init();
-	os_init();
 	led_notify(LED_STATE_BOOTING);
+	/* register lora task to be monitored by watchdog */
+	wdog_id = sys_watchdog_register(false);
+	lora_task_handle = OS_GET_CURRENT_TASK();
 	// check if the suota upgrade bit was set before reboot.
 	upgrade_init();
 #ifdef BLE_ALWAYS_ON
 	ble_on();
 #endif
-#ifdef HELLO
-	os_setCallback(&hello_job, say_hi);
+	//Initialize LoRaMAC
+	LoRaMacPrimitives_t LoRaMacPrimitives;
+  LoRaMacCallback_t   LoRaMacCallbacks;
+  MibRequestConfirm_t mibReq;
+
+  DeviceState = DEVICE_STATE_INIT;
+
+	// start main loop of lora task.
+  for (;;) {
+    OS_BASE_TYPE ret;
+    uint32_t notif;
+
+    /* notify watchdog on each loop */
+    sys_watchdog_notify(wdog_id);
+
+    /* suspend watchdog while blocking on OS_TASK_NOTIFY_WAIT() */
+    sys_watchdog_suspend(wdog_id);
+
+    /*
+     * Wait on any of the notification bits, then clear them all
+     */
+    ret = OS_TASK_NOTIFY_WAIT(0, OS_TASK_NOTIFY_ALL_BITS, &notif, OS_TASK_NOTIFY_FOREVER);
+    /* Blocks forever waiting for task notification. The return value must be OS_OK */
+    OS_ASSERT(ret == OS_OK);
+
+    /* resume watchdog */
+    sys_watchdog_notify_and_resume(wdog_id);
+
+    switch( DeviceState )
+    {
+      case DEVICE_STATE_INIT:
+      {
+        LoRaMacPrimitives.MacMcpsConfirm = McpsConfirm;
+        LoRaMacPrimitives.MacMcpsIndication = McpsIndication;
+        LoRaMacPrimitives.MacMlmeConfirm = MlmeConfirm;
+        LoRaMacCallbacks.GetBatteryLevel = bat_level;
+        LoRaMacInitialization( &LoRaMacPrimitives, &LoRaMacCallbacks );
+
+        if(next_tx_timer == NULL){
+          next_tx_timer = OS_TIMER_CREATE("nexttx", sensor_period(), \
+            OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), next_tx_cb);
+
+          OS_ASSERT(next_tx_timer);
+        }
+
+        if(prepare_tx_timer == NULL){
+          prepare_tx_timer = OS_TIMER_CREATE("preparetx", sensor_data_ready(), \
+            OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), lora_tx_ready_cb);
+
+          OS_ASSERT(prepare_tx_timer);
+        }
+
+        mibReq.Type = MIB_ADR;
+        mibReq.Param.AdrEnable = LORAWAN_ADR_ON;
+        LoRaMacMibSetRequestConfirm( &mibReq );
+
+        mibReq.Type = MIB_PUBLIC_NETWORK;
+        mibReq.Param.EnablePublicNetwork = LORAWAN_PUBLIC_NETWORK;
+        LoRaMacMibSetRequestConfirm( &mibReq );
+
+#if defined( USE_BAND_868 )
+        LoRaMacTestSetDutyCycleOn( LORAWAN_DUTYCYCLE_ON );
+
+#if( USE_SEMTECH_DEFAULT_CHANNEL_LINEUP == 1 )
+        LoRaMacChannelAdd( 3, ( ChannelParams_t )LC4 );
+        LoRaMacChannelAdd( 4, ( ChannelParams_t )LC5 );
+        LoRaMacChannelAdd( 5, ( ChannelParams_t )LC6 );
+        LoRaMacChannelAdd( 6, ( ChannelParams_t )LC7 );
+        LoRaMacChannelAdd( 7, ( ChannelParams_t )LC8 );
+        LoRaMacChannelAdd( 8, ( ChannelParams_t )LC9 );
+        LoRaMacChannelAdd( 9, ( ChannelParams_t )LC10 );
 #endif
-	// initialize lora structures.
-	lora_init();
-	// start main loop of lmic os.
-	os_runloop();
-	// should never reach here.
+
+#endif
+        // TODO:Class C device if needed. Implement later.
+//        mibReq.Type = MIB_DEVICE_CLASS;
+//        mibReq.Param.Class = CLASS_C;
+//        LoRaMacMibSetRequestConfirm( &mibReq );
+
+        DeviceState = DEVICE_STATE_JOIN;
+        break;
+        }
+        case DEVICE_STATE_JOIN:
+        {
+          led_notify(LED_STATE_JOINING);
+#if( OVER_THE_AIR_ACTIVATION != 0 )
+          MlmeReq_t mlmeReq;
+
+          mlmeReq.Type = MLME_JOIN;
+
+          mlmeReq.Req.Join.DevEui = param_get_addr(PARAM_DEV_EUI);
+          mlmeReq.Req.Join.AppEui = param_get_addr(PARAM_APP_EUI);
+          mlmeReq.Req.Join.AppKey = param_get_addr(PARAM_DEV_KEY);
+
+          if( NextTx == true )
+          {
+              LoRaMacMlmeRequest( &mlmeReq );
+          }
+          DeviceState = DEVICE_STATE_SLEEP;
+#else
+          // Choose a random device address if not already defined in Comissioning.h
+          if( DevAddr == 0 )
+          {
+              // Random seed initialization
+              srand1( BoardGetRandomSeed( ) );
+
+              // Choose a random device address
+              DevAddr = randr( 0, 0x01FFFFFF );
+          }
+
+          mibReq.Type = MIB_NET_ID;
+          mibReq.Param.NetID = LORAWAN_NETWORK_ID;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+          mibReq.Type = MIB_DEV_ADDR;
+          mibReq.Param.DevAddr = DevAddr;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+          mibReq.Type = MIB_NWK_SKEY;
+          mibReq.Param.NwkSKey = NwkSKey;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+          mibReq.Type = MIB_APP_SKEY;
+          mibReq.Param.AppSKey = AppSKey;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+          mibReq.Type = MIB_NETWORK_JOINED;
+          mibReq.Param.IsNetworkJoined = true;
+          LoRaMacMibSetRequestConfirm( &mibReq );
+
+          DeviceState = DEVICE_STATE_SEND;
+#endif
+          break;
+      }
+      case DEVICE_STATE_PREPARE_TX:
+      {
+#ifdef DEBUG
+        printf("netid = %06lx\r\n", mibReq.Param.NetID);
+#endif
+        ad_lora_suspend_sleep(LORA_SUSPEND_LORA, TX_TIMEOUT);
+        proto_txstart();
+        sampling_since = OS_GET_TICK_COUNT();
+        led_notify(LED_STATE_SAMPLING_SENSOR);
+        sensor_prepare();
+        OS_TIMER_START(prepare_tx_timer, OS_TIMER_FOREVER);
+        DeviceState = DEVICE_STATE_SLEEP;
+        break;
+      }
+      case DEVICE_STATE_SEND:
+      {
+        if( NextTx == true )
+        {
+#ifdef DEBUG
+          debug_time();
+          printf("lora state %d\r\n", DEVICE_STATE_SEND);
+#endif
+          led_notify(LED_STATE_IDLE);
+          proto_send_data();
+        }
+
+        DeviceState = DEVICE_STATE_CYCLE;
+        break;
+      }
+      case DEVICE_STATE_CYCLE:
+      {
+        DeviceState = DEVICE_STATE_SLEEP;
+
+        ad_lora_allow_sleep(LORA_SUSPEND_LORA);
+
+        // Schedule next packet transmission
+        OS_TIMER_START(next_tx_timer, OS_TIMER_FOREVER);
+        break;
+      }
+      case DEVICE_STATE_SLEEP:
+      {
+        // Wake up through events
+        break;
+      }
+      default:
+      {
+        DeviceState = DEVICE_STATE_INIT;
+        break;
+      }
+    }
+
+    if (notif & EVENT_NOTIF_CONS_RX) {
+      cons_rx();
+    }
+  }
 }
