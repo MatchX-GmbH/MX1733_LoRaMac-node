@@ -8,6 +8,7 @@
 
 #include "board.h"
 #include "ble/ble.h"
+#include "hw/button.h"
 #include "hw/cons.h"
 #include "hw/hw.h"
 #include "hw/iox.h"
@@ -21,6 +22,7 @@
 #include "lora/mac/LoRaMac.h"
 #include "sensor/sensor.h"
 #include "sensor/bat.h"
+#include "sensor/gps.h"
 
 #define DEBUG
 #define DEBUG_TIME
@@ -166,7 +168,7 @@ PRIVILEGED_DATA static spi_config  spi_conf= {
 /*!
  * Indicates if a new packet can be sent
  */
-PRIVILEGED_DATA static bool NextTx = true;
+INITIALISED_PRIVILEGED_DATA static bool NextTx = true;
 
 #ifdef DEBUG
 
@@ -254,6 +256,7 @@ static void next_tx_cb(OS_TIMER timer)
       DeviceState = DEVICE_STATE_JOIN;
     }
   }
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
 
 /*!
@@ -269,6 +272,7 @@ static void lora_tx_ready_cb(OS_TIMER timer)
   } else {
     DeviceState = DEVICE_STATE_SEND;
   }
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
 
 /*!
@@ -306,6 +310,7 @@ static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
     }
   }
   NextTx = true;
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
 
 /*!
@@ -465,6 +470,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
       break;
     }
   }
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
 
 /*!
@@ -502,14 +508,41 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
         break;
     }
   }
+  else
+  {
+    DeviceState = DEVICE_STATE_JOIN;
+  }
   NextTx = true;
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
 
 static void
 lora_wkup_int_cb(void)
 {
-  //TODO: Implement wakeup notifications.
+  if (hw_wkup_get_pin_trigger(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN))
+  {
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO0);
+  }
+  if (hw_wkup_get_pin_trigger(HW_LORA_DIO1_PORT, HW_LORA_DIO1_PIN))
+  {
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO1);
+  }
+  if (hw_wkup_get_pin_trigger(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN))
+  {
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO2);
+  }
+#ifdef FEATURE_USER_BUTTON
+  if (hw_wkup_get_pin_trigger(HW_USER_BTN_PORT, HW_USER_BTN_PIN))
+  {
+    lora_task_notify_event(EVENT_NOTIF_BTN_PRESS);
+  }
+#endif
   hw_wkup_reset_interrupt();
+}
+
+void lora_task_notify_event(uint32_t event)
+{
+  OS_TASK_NOTIFY_FROM_ISR(lora_task_handle, event, eSetBits);
 }
 
 void
@@ -577,23 +610,10 @@ lora_task_func(void *param)
 	// start main loop of lora task.
   for (;;) {
     OS_BASE_TYPE ret;
-    uint32_t notif;
+    uint32_t notif = 0;
 
     /* notify watchdog on each loop */
     sys_watchdog_notify(wdog_id);
-
-    /* suspend watchdog while blocking on OS_TASK_NOTIFY_WAIT() */
-    sys_watchdog_suspend(wdog_id);
-
-    /*
-     * Wait on any of the notification bits, then clear them all
-     */
-    ret = OS_TASK_NOTIFY_WAIT(0, OS_TASK_NOTIFY_ALL_BITS, &notif, OS_TASK_NOTIFY_FOREVER);
-    /* Blocks forever waiting for task notification. The return value must be OS_OK */
-    OS_ASSERT(ret == OS_OK);
-
-    /* resume watchdog */
-    sys_watchdog_notify_and_resume(wdog_id);
 
     switch( DeviceState )
     {
@@ -743,6 +763,18 @@ lora_task_func(void *param)
       case DEVICE_STATE_SLEEP:
       {
         // Wake up through events
+        /* suspend watchdog while blocking on OS_TASK_NOTIFY_WAIT() */
+        sys_watchdog_suspend(wdog_id);
+
+        /*
+         * Wait on any of the notification bits, then clear them all
+         */
+        ret = OS_TASK_NOTIFY_WAIT(0, OS_TASK_NOTIFY_ALL_BITS, &notif, OS_TASK_NOTIFY_FOREVER);
+        /* Blocks forever waiting for task notification. The return value must be OS_OK */
+        OS_ASSERT(ret == OS_OK);
+
+        /* resume watchdog */
+        sys_watchdog_notify_and_resume(wdog_id);
         break;
       }
       default:
@@ -752,8 +784,33 @@ lora_task_func(void *param)
       }
     }
 
+    if (notif & EVENT_NOTIF_LORA_DIO0) {
+      gp_irqHandlers[0]();
+    }
+
+    if (notif & EVENT_NOTIF_LORA_DIO1) {
+      gp_irqHandlers[1]();
+    }
+
+    if (notif & EVENT_NOTIF_LORA_DIO2) {
+      gp_irqHandlers[2]();
+    }
+
+    if (notif & EVENT_NOTIF_BTN_PRESS) {
+      button_press(OS_GET_TICK_COUNT());
+    }
+
     if (notif & EVENT_NOTIF_CONS_RX) {
       cons_rx();
+    }
+
+    if (notif & EVENT_NOTIF_GPS_RX) {
+      gps_rx();
+    }
+
+    if (notif & EVENT_NOTIF_LORAMAC) {
+      debug_time();
+      printf("state %d\r\n", DeviceState);
     }
   }
 }

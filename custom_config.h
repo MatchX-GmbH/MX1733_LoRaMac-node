@@ -160,9 +160,6 @@
 /* Include memory layout */
 #include "bsp_memory_layout.h"
 
-/* LMIC */
-#define CFG_sx1276_radio
-
 #endif /* CUSTOM_CONFIG_QSPI_H_ */
 
 /**

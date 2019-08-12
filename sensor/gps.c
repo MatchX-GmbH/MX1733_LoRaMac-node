@@ -8,12 +8,13 @@
 
 #include "hw/hw.h"
 #include "hw/power.h"
+#include "lora/lora.h"
 #include "lora/util.h"
 #include "gps.h"
 
 #ifdef FEATURE_SENSOR_GPS
 
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #include <stdio.h>
@@ -198,8 +199,17 @@ msgproc(char *msg, int len)
 static void
 gps_uart_rx(OS_TIMER timer)
 {
+  (void)(timer);
+  lora_task_notify_event(EVENT_NOTIF_GPS_RX);
+}
+
+void gps_rx(void)
+{
 #ifdef DEBUG
-  printf("rx: ");
+  if((!hw_uart_read_buf_empty(HW_UART2)) \
+    && (rxlen == 0)){
+    printf("gps rx begin:\r\n");
+  }
 #endif
   while (!hw_uart_read_buf_empty(HW_UART2)) {
     uint8_t	c;
@@ -213,17 +223,24 @@ gps_uart_rx(OS_TIMER timer)
     printf("%c", c);
 #endif
     if ((rxbuf[rxlen++] = c) == '\n') {
-      if (msgproc(rxbuf, rxlen))
+      if (msgproc(rxbuf, rxlen)){
+        if(last_fix.fix != 0){
+          status |= STATUS_GPS_FIX_FOUND;
+        }
         status |= STATUS_GPS_INFO_RECEIVED;
+      }
       rxlen = 0;
     }
   }
   if (!(status & STATUS_GPS_INFO_RECEIVED))
   {
-    OS_TIMER_START(timer, OS_TIMER_FOREVER);
+    OS_TIMER_START(gps_rx_timer, OS_TIMER_FOREVER);
   }
 #ifdef DEBUG
-  printf("\r\n");
+  else
+  {
+    printf("\r\ngps rx end.\r\n");
+  }
 #endif
 }
 
@@ -261,15 +278,14 @@ gps_init()
 void
 gps_prepare()
 {
-  power(POWER_SENSOR, true);
   status |= STATUS_CONNECTED;
-  power(POWER_SENSOR, !(status & STATUS_GPS_FIX_FOUND));
 #ifdef DEBUG
   printf("gps status %02x\r\n", status);
 #endif
   rxlen = 0;
   memset(&last_fix, 0, sizeof(last_fix));
   status &= ~STATUS_GPS_INFO_RECEIVED;
+  status &= ~STATUS_GPS_FIX_FOUND;
   while (!hw_uart_read_buf_empty(HW_UART2))
     hw_uart_read(HW_UART2);
   OS_TIMER_START(gps_rx_timer, OS_TIMER_FOREVER);

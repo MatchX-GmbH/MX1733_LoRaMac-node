@@ -120,6 +120,11 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/memory/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/adapters/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc}/sdk/interfaces/ble_stack/&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/boards&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/radio&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/system/crypto&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/mac&quot;"/>
 								</option>
 								<option id="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs.1559184786" name="Defined symbols (-D)" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="dg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A"/>
@@ -312,6 +317,11 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/peripherals/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/memory/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/adapters/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/boards&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/radio&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/system/crypto&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/mac&quot;"/>
 								</option>
 								<option id="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs.1782364272" name="Defined symbols (-D)" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="dg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A"/>
@@ -506,6 +516,11 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/memory/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/adapters/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${projectLoc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/boards&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/mac&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/radio&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/system/crypto&quot;"/>
 								</option>
 								<option id="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs.11023843" name="Defined symbols (-D)" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="dg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A"/>
@@ -699,6 +714,11 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/memory/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/adapters/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${projectLoc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/boards&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/radio&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/system/crypto&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/mac&quot;"/>
 								</option>
 								<option id="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs.721312202" name="Defined symbols (-D)" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="dg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A"/>
@@ -892,6 +912,11 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/memory/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/sdk/adapters/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc}/sdk/interfaces/ble_stack/&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/boards&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/radio&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/system/crypto&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${projectLoc}/lora/mac&quot;"/>
 								</option>
 								<option id="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs.1883120553" name="Defined symbols (-D)" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.c.compiler.defs" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="dg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A"/>

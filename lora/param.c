@@ -13,7 +13,7 @@
 
 /* EUI-64: 78af58fffe040000 */
 INITIALISED_PRIVILEGED_DATA static uint8_t  deveui64[8] = {
-  0x00, 0x00, 0x04, 0xfe, 0xff, 0x58, 0xaf, 0x78,
+  0x78, 0xaf, 0x58, 0xff, 0xfe, 0x04, 0x00, 0x00,
 };
 /* EUI-48: 78af58040000 */
 INITIALISED_PRIVILEGED_DATA static uint8_t	deveui48[6] = {
@@ -21,7 +21,7 @@ INITIALISED_PRIVILEGED_DATA static uint8_t	deveui48[6] = {
 };
 /* 78af580000040000 */
 INITIALISED_PRIVILEGED_DATA static uint8_t	appeui[8] = {
-  0x00, 0x00, 0x04, 0x00, 0x00, 0x58, 0xaf, 0x78,
+  0x78, 0xaf, 0x58, 0x00, 0x00, 0x04, 0x00, 0x00,
 };
 /* df89dc73d9f52c0609edb2185efa4a34 */
 INITIALISED_PRIVILEGED_DATA static uint8_t	devkey[16] = {
@@ -73,7 +73,6 @@ static const struct param_def	params[] = {
     .mem	= appeui,
     .offset	= PARAM_APP_EUI_OFF,
     .len	= PARAM_APP_EUI_LEN,
-    .flags	= PARAM_FLAG_REVERSE,
   },
   [PARAM_DEV_KEY] = {
     .mem	= devkey,
@@ -111,10 +110,10 @@ reverse_memcpy(void *dest, void *src, size_t len)
 static void
 param_copyDevEui64(void)
 {
-  memcpy(deveui64, deveui48, 3);
-  deveui64[3] = 0xfe;
-  deveui64[4] = 0xff;
-  memcpy(deveui64 + 5, deveui48 + 3, 3);
+  reverse_memcpy(deveui64 + 5, deveui48, 3);
+  deveui64[3] = 0xff;
+  deveui64[4] = 0xfe;
+  reverse_memcpy(deveui64, deveui48 + 3, 3);
 }
 
 /* Read param from permanent storage into memory */
@@ -227,7 +226,7 @@ param_init(void)
 #ifdef DEBUG
   {
     param_copyDevEui64();
-    for (int j = sizeof(deveui64) - 1; j >= 0; j--)
+    for (uint8_t j = 0 ; j < sizeof(deveui64) ; j++)
       printf("%02x", deveui64[j]);
     printf("\r\n");
   }

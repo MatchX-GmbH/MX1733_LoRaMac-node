@@ -122,11 +122,12 @@ cmd_param(int argc, char **argv)
 }
 
 static void
-sensor_cb(OS_TIMER timer)
+cmd_sense(int argc, char **argv)
 {
-  char  buf[16];
-  size_t  i,j, len;
-  (void)timer;
+  (void)argc;
+  (void)argv;
+  char buf[16];
+  size_t i, j, len;
 
   // Try to get all sensor data and print if any.
   for (i = 0; i < SENSOR_MAX; i++) {
@@ -138,24 +139,7 @@ sensor_cb(OS_TIMER timer)
       printf("\r\n");
     }
   }
-}
-
-static void
-cmd_sense(int argc, char **argv)
-{
-  PRIVILEGED_DATA static OS_TIMER sensor_timer;
-  (void)argc;
-  (void)argv;
-
-  if(sensor_timer == NULL){
-    /* create timer for the sensors */
-    sensor_timer = OS_TIMER_CREATE("sensorprep", OS_MS_2_TICKS(2000),
-      OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), sensor_cb);
-
-    OS_ASSERT(sensor_timer);
-  }
   sensor_prepare();
-  OS_TIMER_START(sensor_timer, OS_TIMER_FOREVER);
 }
 
 static void
@@ -328,8 +312,7 @@ uart_isr()
 		}
 		if (!cons_pending) {
 			cons_pending = 1;
-			OS_TASK_NOTIFY_FROM_ISR(OS_GET_CURRENT_TASK(), \
-			  EVENT_NOTIF_CONS_RX, eSetBits);
+			lora_task_notify_event(EVENT_NOTIF_CONS_RX);
 		}
 		break;
 	default:
