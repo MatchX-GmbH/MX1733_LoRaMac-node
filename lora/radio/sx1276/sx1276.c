@@ -255,7 +255,7 @@ void SX1276Init( RadioEvents_t *events )
         SX1276Write( RadioRegsInit[i].Addr, RadioRegsInit[i].Value );
     }
 
-    SX1276SetModem( MODEM_FSK );
+    SX1276SetModem( MODEM_LORA );
 
     SX1276.Settings.State = RF_IDLE;
 }
@@ -906,20 +906,20 @@ void SX1276Send( uint8_t *buffer, uint8_t size )
 
 void SX1276SetSleep( void )
 {
-    OS_TIMER_STOP(RxTimeoutTimer, OS_TIMER_FOREVER);
-    OS_TIMER_STOP(TxTimeoutTimer, OS_TIMER_FOREVER);
+	OS_TIMER_STOP(RxTimeoutTimer, OS_TIMER_FOREVER);
+	OS_TIMER_STOP(TxTimeoutTimer, OS_TIMER_FOREVER);
 
-    SX1276SetOpMode( RF_OPMODE_SLEEP );
-    SX1276.Settings.State = RF_IDLE;
+	SX1276SetOpMode( RF_OPMODE_SLEEP );
+	SX1276.Settings.State = RF_IDLE;
 }
 
 void SX1276SetStby( void )
 {
-    OS_TIMER_STOP(RxTimeoutTimer, OS_TIMER_FOREVER);
-    OS_TIMER_STOP(TxTimeoutTimer, OS_TIMER_FOREVER);
+	OS_TIMER_STOP(RxTimeoutTimer, OS_TIMER_FOREVER);
+	OS_TIMER_STOP(TxTimeoutTimer, OS_TIMER_FOREVER);
 
-    SX1276SetOpMode( RF_OPMODE_STANDBY );
-    SX1276.Settings.State = RF_IDLE;
+	SX1276SetOpMode( RF_OPMODE_STANDBY );
+	SX1276.Settings.State = RF_IDLE;
 }
 
 void SX1276SetRx( uint32_t timeout )
@@ -1220,7 +1220,7 @@ void SX1276Reset( void )
 {
   // Set RESET pin to 0
   hw_gpio_configure_pin(HW_LORA_REST_PORT, HW_LORA_REST_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, true);
+    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, false);
   // Wait 1 ms
   DelayMs( 1 );
 
@@ -1285,10 +1285,10 @@ void SX1276SetModem( RadioModems_t modem )
 static uint8_t SpiInOut(Spi_t *spi_conf, uint8_t outval)
 {
   (void)(spi_conf);
-  hw_spi_wait_while_busy(HW_SPI2);
-  hw_spi_fifo_write8(HW_SPI2, outval);
-  hw_spi_wait_while_busy(HW_SPI2);
-  return hw_spi_fifo_read8(HW_SPI2);
+  hw_spi_wait_while_busy(HW_LORA_SPI);
+  hw_spi_fifo_write8(HW_LORA_SPI, outval);
+  hw_spi_wait_while_busy(HW_LORA_SPI);
+  return hw_spi_fifo_read8(HW_LORA_SPI);
 }
 
 void SX1276Write( uint8_t addr, uint8_t data )
@@ -1394,7 +1394,7 @@ void SX1276OnTimeoutIrq(OS_TIMER timer)
             else
             {
                 SX1276.Settings.State = RF_IDLE;
-                OS_TIMER_START(RxTimeoutSyncWord, OS_TIMER_FOREVER);
+                OS_TIMER_STOP(RxTimeoutSyncWord, OS_TIMER_FOREVER);
             }
         }
         if( ( RadioEvents != NULL ) && ( RadioEvents->RxTimeout != NULL ) )
@@ -1421,7 +1421,7 @@ void SX1276OnDio0Irq( void )
     switch( SX1276.Settings.State )
     {
         case RF_RX_RUNNING:
-            //TimerStop( &RxTimeoutTimer );
+            OS_TIMER_STOP(RxTimeoutTimer, OS_TIMER_FOREVER);
             // RxDone interrupt
             switch( SX1276.Settings.Modem )
             {

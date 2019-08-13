@@ -57,7 +57,7 @@
 
 #define dg_configUSER_CAN_USE_TIMER1            (0)
 
-#define dg_configOPTIMAL_RETRAM                 (0)
+#define dg_configOPTIMAL_RETRAM                 (1)
 
 #if (dg_configOPTIMAL_RETRAM == 1)
         #if (dg_configBLACK_ORCA_IC_REV == BLACK_ORCA_IC_REV_A)
@@ -70,24 +70,25 @@
 #endif
 
 #define dg_configUSE_WDOG                       (1)
+#define dg_configWDOG_MAX_TASKS_CNT             (8)
 
+#define dg_configUSE_DCDC                       (1)
 
 #define dg_configFLASH_CONNECTED_TO             (FLASH_CONNECTED_TO_1V8)
-#define dg_configFLASH_POWER_DOWN               (0)
+#define dg_configFLASH_POWER_DOWN               (1)
 
 #define dg_configPOWER_1V8_ACTIVE               (1)
 #define dg_configPOWER_1V8_SLEEP                (1)
 
-#define dg_configBATTERY_TYPE                   (BATTERY_TYPE_CUSTOM)
-#define dg_configBATTERY_CHARGE_VOLTAGE         0xA     // 4.2V
-#define dg_configBATTERY_TYPE_CUSTOM_ADC_VOLTAGE        (3439)
-#define dg_configBATTERY_LOW_LEVEL              (2457)  // 3V
-#define dg_configPRECHARGING_THRESHOLD          (2462)  // 3.006V
-#define dg_configCHARGING_THRESHOLD             (2498)  // 3.05V
-#define dg_configBATTERY_CHARGE_CURRENT         4       // 60mA
-#define dg_configBATTERY_PRECHARGE_CURRENT      20      // 2.1mA
+#define dg_configBATTERY_TYPE                   (BATTERY_TYPE_LIMN2O4)
+#define dg_configBATTERY_CHARGE_CURRENT         11      // 300mA
+#define dg_configBATTERY_PRECHARGE_CURRENT      29      // 15.3mA
 #define dg_configBATTERY_CHARGE_NTC             1       // disabled
-#define dg_configPRECHARGING_TIMEOUT            (30 * 60 * 100)  // N x 10msec
+#define dg_configPRECHARGING_THRESHOLD          2462    // 3.006V
+#define dg_configCHARGING_THRESHOLD             2498    // 3.05V
+#define dg_configPRECHARGING_TIMEOUT    (2 * 60 * 60 * 100)  // 2 hours
+#define dg_configCHARGING_CC_TIMEOUT    (9 * 60 * 60 * 100)  // 9 hours
+#define dg_configCHARGING_CV_TIMEOUT    (8 * 60 * 60 * 100)  // 8 hours
 
 #define dg_configUSE_SOC                        1
 /* Uncomment the following line to enable State-of-Charge debugging or performance test */
@@ -96,7 +97,7 @@
         #define CONFIG_RETARGET
 #endif
 
-#define dg_configUSE_USB                        1
+#define dg_configUSE_USB                        0
 #define dg_configUSE_USB_CHARGER                1
 #define dg_configALLOW_CHARGING_NOT_ENUM        1
 #define dg_configUSE_NOT_ENUM_CHARGING_TIMEOUT  0
@@ -149,9 +150,6 @@
 #ifdef CONFIG_CUSTOM_PRINT
 #define __HEAP_SIZE                             0x600
 #endif
-
-/* LMIC */
-#define CFG_sx1276_radio
 
 #define defaultBLE_ATT_DB_CONFIGURATION         (0x10)  // with "Peripheral Preferred Connection Parameters"
 #define defaultBLE_PPCP_INTERVAL_MIN            (BLE_CONN_INTERVAL_FROM_MS(500))    // 500 ms

@@ -56,10 +56,36 @@ const struct Radio_s Radio =
 Gpio_t AntSwitchLf;
 Gpio_t AntSwitchHf;
 
+static spi_config  spi_conf= {
+  .cs_pad   = {
+    .port = HW_LORA_SPI_CS_PORT,
+    .pin  = HW_LORA_SPI_CS_PIN,
+  },
+  .word_mode      = HW_SPI_WORD_8BIT,
+  .smn_role       = HW_SPI_MODE_MASTER,
+  .polarity_mode  = HW_SPI_POL_LOW,
+  .phase_mode     = HW_SPI_PHA_MODE_0,
+  .mint_mode      = HW_SPI_MINT_DISABLE,
+  .xtal_freq      = HW_SPI_FREQ_DIV_8,
+  .fifo_mode      = HW_SPI_FIFO_RX_TX,
+};
+
 void SX1276IoInit( void )
 {
+  hw_gpio_configure_pin(HW_LORA_REST_PORT, HW_LORA_REST_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, true);
+  hw_gpio_set_pin_function(HW_LORA_SPI_CLK_PORT, HW_LORA_SPI_CLK_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_CLK);
+  hw_gpio_set_pin_function(HW_LORA_SPI_DI_PORT, HW_LORA_SPI_DI_PIN,
+    HW_GPIO_MODE_INPUT, HW_LORA_GPIO_FUNC_SPI_DI);
+  hw_gpio_set_pin_function(HW_LORA_SPI_DO_PORT, HW_LORA_SPI_DO_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_DO);
   hw_gpio_configure_pin(HW_LORA_SPI_CS_PORT, HW_LORA_SPI_CS_PIN,
     HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, true);
+  hw_gpio_set_pin_function(HW_LORA_RX_PORT, HW_LORA_RX_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
+  hw_gpio_set_pin_function(HW_LORA_TX_PORT, HW_LORA_TX_PIN,
+    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
 
   hw_gpio_set_pin_function(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN,
     HW_GPIO_MODE_INPUT, HW_GPIO_FUNC_GPIO);
@@ -67,6 +93,10 @@ void SX1276IoInit( void )
     HW_GPIO_MODE_INPUT, HW_GPIO_FUNC_GPIO);
   hw_gpio_set_pin_function(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN,
     HW_GPIO_MODE_INPUT, HW_GPIO_FUNC_GPIO);
+
+  hw_spi_init(HW_LORA_SPI, &spi_conf);
+
+  SX1276.Spi.spi_conf = &spi_conf;
 }
 
 void SX1276IoIrqInit( DioIrqHandler **irqHandlers )
@@ -76,20 +106,12 @@ void SX1276IoIrqInit( DioIrqHandler **irqHandlers )
 
 void SX1276IoDeInit( void )
 {
-  hw_gpio_configure_pin(HW_LORA_SPI_CS_PORT, HW_LORA_SPI_CS_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, false);
+
 }
 
 uint8_t SX1276GetPaSelect( uint32_t channel )
 {
-  if( channel < RF_MID_BAND_THRESH )
-  {
-    return RF_PACONFIG_PASELECT_PABOOST;
-  }
-  else
-  {
-    return RF_PACONFIG_PASELECT_RFO;
-  }
+  return RF_PACONFIG_PASELECT_PABOOST;
 }
 
 void SX1276SetAntSwLowPower( bool status )

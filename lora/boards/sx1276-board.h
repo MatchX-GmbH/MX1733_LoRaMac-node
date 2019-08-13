@@ -38,6 +38,7 @@ Maintainer: Miguel Luis and Gregory Cristian
     { MODEM_FSK , REG_DIOMAPPING1        , 0x00 },\
     { MODEM_FSK , REG_DIOMAPPING2        , 0x30 },\
     { MODEM_LORA, REG_LR_PAYLOADMAXLENGTH, 0x40 },\
+    { MODEM_LORA, REG_LR_PACONFIG        , 0xCF },\
 }                                                 \
 
 #define RF_MID_BAND_THRESH                          525000000

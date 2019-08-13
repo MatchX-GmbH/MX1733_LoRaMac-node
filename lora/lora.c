@@ -151,20 +151,6 @@ PRIVILEGED_DATA static OS_TIMER prepare_tx_timer;
 
 PRIVILEGED_DATA static DioIrqHandler **gp_irqHandlers;
 
-PRIVILEGED_DATA static spi_config  spi_conf= {
-  .cs_pad   = {
-    .port = HW_LORA_SPI_CS_PORT,
-    .pin  = HW_LORA_SPI_CS_PIN,
-  },
-  .word_mode      = HW_SPI_WORD_8BIT,
-  .smn_role       = HW_SPI_MODE_MASTER,
-  .polarity_mode  = HW_SPI_POL_LOW,
-  .phase_mode     = HW_SPI_PHA_MODE_0,
-  .mint_mode      = HW_SPI_MINT_DISABLE,
-  .xtal_freq      = HW_SPI_FREQ_DIV_8,
-  .fifo_mode      = HW_SPI_FIFO_RX_TX,
-};
-
 /*!
  * Indicates if a new packet can be sent
  */
@@ -508,10 +494,6 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
         break;
     }
   }
-  else
-  {
-    DeviceState = DEVICE_STATE_JOIN;
-  }
   NextTx = true;
   lora_task_notify_event(EVENT_NOTIF_LORAMAC);
 }
@@ -519,20 +501,20 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
 static void
 lora_wkup_int_cb(void)
 {
-  if (hw_wkup_get_pin_trigger(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN))
+  if (hw_gpio_get_pin_status(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN))
   {
     lora_task_notify_event(EVENT_NOTIF_LORA_DIO0);
   }
-  if (hw_wkup_get_pin_trigger(HW_LORA_DIO1_PORT, HW_LORA_DIO1_PIN))
+  if (hw_gpio_get_pin_status(HW_LORA_DIO1_PORT, HW_LORA_DIO1_PIN))
   {
     lora_task_notify_event(EVENT_NOTIF_LORA_DIO1);
   }
-  if (hw_wkup_get_pin_trigger(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN))
+  if (hw_gpio_get_pin_status(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN))
   {
     lora_task_notify_event(EVENT_NOTIF_LORA_DIO2);
   }
 #ifdef FEATURE_USER_BUTTON
-  if (hw_wkup_get_pin_trigger(HW_USER_BTN_PORT, HW_USER_BTN_PIN))
+  if (hw_gpio_get_pin_status(HW_USER_BTN_PORT, HW_USER_BTN_PIN))
   {
     lora_task_notify_event(EVENT_NOTIF_BTN_PRESS);
   }
@@ -548,24 +530,10 @@ void lora_task_notify_event(uint32_t event)
 void
 lora_hw_init(void *irq)
 {
-  SX1276IoInit();
-
-  hw_gpio_configure_pin(HW_LORA_REST_PORT, HW_LORA_REST_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO, true);
-  hw_gpio_set_pin_function(HW_LORA_SPI_CLK_PORT, HW_LORA_SPI_CLK_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_CLK);
-  hw_gpio_set_pin_function(HW_LORA_SPI_DI_PORT, HW_LORA_SPI_DI_PIN,
-    HW_GPIO_MODE_INPUT, HW_LORA_GPIO_FUNC_SPI_DI);
-  hw_gpio_set_pin_function(HW_LORA_SPI_DO_PORT, HW_LORA_SPI_DO_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_LORA_GPIO_FUNC_SPI_DO);
-
 #ifdef FEATURE_USER_BUTTON
   hw_gpio_set_pin_function(HW_USER_BTN_PORT, HW_USER_BTN_PIN,
     HW_GPIO_MODE_INPUT, HW_GPIO_FUNC_GPIO);
 #endif
-  hw_spi_init(HW_LORA_SPI, &spi_conf);
-
-  SX1276.Spi.spi_conf = &spi_conf;
 
   hw_wkup_init(NULL);
   hw_wkup_set_counter_threshold(1);
@@ -582,6 +550,7 @@ lora_hw_init(void *irq)
   hw_wkup_register_interrupt(lora_wkup_int_cb, 1);
 
   gp_irqHandlers = irq;
+  OS_ASSERT(irq);
 }
 
 void
@@ -606,6 +575,7 @@ lora_task_func(void *param)
   MibRequestConfirm_t mibReq;
 
   DeviceState = DEVICE_STATE_INIT;
+  SX1276IoInit();
 
 	// start main loop of lora task.
   for (;;) {
@@ -633,7 +603,7 @@ lora_task_func(void *param)
         }
 
         if(prepare_tx_timer == NULL){
-          prepare_tx_timer = OS_TIMER_CREATE("preparetx", sensor_data_ready(), \
+          prepare_tx_timer = OS_TIMER_CREATE("preparetx", OS_MS_2_TICKS(100), \
             OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), lora_tx_ready_cb);
 
           OS_ASSERT(prepare_tx_timer);
@@ -805,12 +775,17 @@ lora_task_func(void *param)
     }
 
     if (notif & EVENT_NOTIF_GPS_RX) {
+#ifdef FEATURE_SENSOR_GPS
       gps_rx();
+#endif
     }
 
     if (notif & EVENT_NOTIF_LORAMAC) {
       debug_time();
-      printf("state %d\r\n", DeviceState);
     }
+#ifdef DEBUG
+    printf("state %d\r\n", DeviceState);
+    printf("Debug SX1276: %d\r\n", SX1276Read( REG_OPMODE ));
+#endif
   }
 }
