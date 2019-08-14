@@ -15,7 +15,7 @@
 
 void lora_hw_init(void *irq);
 void lora_task_func(void *param);
-void lora_task_notify_event(uint32_t event);
+void lora_task_notify_event(uint32_t event, void *cb);
 void lora_send(uint8_t *data, size_t len);
 
 #endif /* __LORA_H__ */

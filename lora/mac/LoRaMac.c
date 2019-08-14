@@ -579,27 +579,27 @@ static void OnRadioRxTimeout( void );
 /*!
  * \brief Function executed on Resend Frame timer event.
  */
-static void OnMacStateCheckTimerEvent( OS_TIMER timer );
+static void OnMacStateCheckTimerEvent( void );
 
 /*!
  * \brief Function executed on duty cycle delayed Tx  timer event
  */
-static void OnTxDelayedTimerEvent( OS_TIMER timer );
+static void OnTxDelayedTimerEvent( void );
 
 /*!
  * \brief Function executed on first Rx window timer event
  */
-static void OnRxWindow1TimerEvent( OS_TIMER timer );
+static void OnRxWindow1TimerEvent( void );
 
 /*!
  * \brief Function executed on second Rx window timer event
  */
-static void OnRxWindow2TimerEvent( OS_TIMER timer );
+static void OnRxWindow2TimerEvent( void );
 
 /*!
  * \brief Function executed on AckTimeout timer event
  */
-static void OnAckTimeoutTimerEvent( OS_TIMER timer );
+static void OnAckTimeoutTimerEvent( void );
 
 /*!
  * \brief Searches and set the next random available channel
@@ -858,7 +858,7 @@ static void OnRadioTxDone( void )
     }
     else
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
 
     // Store last Tx channel
@@ -870,17 +870,17 @@ static void OnRadioTxDone( void )
 
     if( IsRxWindowsEnabled == true )
     {
-        OS_TIMER_CHANGE_PERIOD(RxWindowTimer1, RxWindow1Delay, OS_TIMER_FOREVER);
+        OS_TIMER_CHANGE_PERIOD(RxWindowTimer1, OS_MS_2_TICKS(RxWindow1Delay), OS_TIMER_FOREVER);
         OS_TIMER_START(RxWindowTimer1, OS_TIMER_FOREVER);
         if( LoRaMacDeviceClass != CLASS_C )
         {
-            OS_TIMER_CHANGE_PERIOD(RxWindowTimer2, RxWindow2Delay, OS_TIMER_FOREVER);
+            OS_TIMER_CHANGE_PERIOD(RxWindowTimer2, OS_MS_2_TICKS(RxWindow2Delay), OS_TIMER_FOREVER);
             OS_TIMER_START(RxWindowTimer2, OS_TIMER_FOREVER);
         }
         if( ( LoRaMacDeviceClass == CLASS_C ) || ( NodeAckRequested == true ) )
         {
             OS_TIMER_CHANGE_PERIOD(AckTimeoutTimer, \
-              RxWindow2Delay + ACK_TIMEOUT + randr( -ACK_TIMEOUT_RND, ACK_TIMEOUT_RND ), \
+              OS_MS_2_TICKS(RxWindow2Delay + ACK_TIMEOUT + randr( -ACK_TIMEOUT_RND, ACK_TIMEOUT_RND )), \
               OS_TIMER_FOREVER);
             OS_TIMER_START(AckTimeoutTimer, OS_TIMER_FOREVER);
         }
@@ -910,20 +910,19 @@ static void PrepareRxDoneAbort( void )
 
     if( NodeAckRequested )
     {
-        OnAckTimeoutTimerEvent( AckTimeoutTimer );
+        OnAckTimeoutTimerEvent( );
     }
 
     if( ( RxSlot == 0 ) && ( LoRaMacDeviceClass == CLASS_C ) )
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
 
     LoRaMacFlags.Bits.McpsInd = 1;
     LoRaMacFlags.Bits.MacDone = 1;
 
-    // Trig OnMacCheckTimerEvent call as soon as possible
-    OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, 1, OS_TIMER_FOREVER);
-    OS_TIMER_START(MacStateCheckTimer, OS_TIMER_FOREVER);
+    // Trig OnMacStateCheckTimerEvent call as soon as possible
+    OnMacStateCheckTimerEvent();
 }
 
 static void OnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
@@ -1313,13 +1312,12 @@ static void OnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t
 
     if( ( RxSlot == 0 ) && ( LoRaMacDeviceClass == CLASS_C ) )
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
     LoRaMacFlags.Bits.MacDone = 1;
 
-    // Trig OnMacCheckTimerEvent call as soon as possible
-    OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, 1, OS_TIMER_FOREVER);
-    OS_TIMER_START(MacStateCheckTimer, OS_TIMER_FOREVER);
+    // Trig OnMacStateCheckTimerEvent call as soon as possible
+    OnMacStateCheckTimerEvent();
 }
 
 static void OnRadioTxTimeout( void )
@@ -1330,7 +1328,7 @@ static void OnRadioTxTimeout( void )
     }
     else
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
 
     McpsConfirm.Status = LORAMAC_EVENT_INFO_STATUS_TX_TIMEOUT;
@@ -1346,7 +1344,7 @@ static void OnRadioRxError( void )
     }
     else
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
 
     if( RxSlot == 1 )
@@ -1368,7 +1366,7 @@ static void OnRadioRxTimeout( void )
     }
     else
     {
-        OnRxWindow2TimerEvent( RxWindowTimer2 );
+        OnRxWindow2TimerEvent( );
     }
 
     if( RxSlot == 1 )
@@ -1382,9 +1380,8 @@ static void OnRadioRxTimeout( void )
     }
 }
 
-static void OnMacStateCheckTimerEvent( OS_TIMER timer )
+static void OnMacStateCheckTimerEvent( void )
 {
-    (void)(timer);
     OS_TIMER_STOP(MacStateCheckTimer, OS_TIMER_FOREVER);
     bool txTimeout = false;
 
@@ -1536,7 +1533,7 @@ static void OnMacStateCheckTimerEvent( OS_TIMER timer )
     else
     {
         // Operation not finished restart timer
-        OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, MAC_STATE_CHECK_TIMEOUT, OS_TIMER_FOREVER);
+        OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, OS_MS_2_TICKS(MAC_STATE_CHECK_TIMEOUT), OS_TIMER_FOREVER);
         OS_TIMER_START(MacStateCheckTimer, OS_TIMER_FOREVER);
     }
 
@@ -1547,9 +1544,8 @@ static void OnMacStateCheckTimerEvent( OS_TIMER timer )
     }
 }
 
-static void OnTxDelayedTimerEvent( OS_TIMER timer )
+static void OnTxDelayedTimerEvent( void )
 {
-    (void)(timer);
     LoRaMacHeader_t macHdr;
     LoRaMacFrameCtrl_t fCtrl;
 
@@ -1573,9 +1569,8 @@ static void OnTxDelayedTimerEvent( OS_TIMER timer )
     ScheduleTx( );
 }
 
-static void OnRxWindow1TimerEvent( OS_TIMER timer )
+static void OnRxWindow1TimerEvent( void )
 {
-    (void)(timer);
     uint16_t symbTimeout = 5; // DR_2, DR_1, DR_0
     int8_t datarate = 0;
     uint32_t bandwidth = 0; // LoRa 125 kHz
@@ -1657,9 +1652,8 @@ static void OnRxWindow1TimerEvent( OS_TIMER timer )
 #endif
 }
 
-static void OnRxWindow2TimerEvent( OS_TIMER timer )
+static void OnRxWindow2TimerEvent( void )
 {
-    (void)(timer);
     uint16_t symbTimeout = 5; // DR_2, DR_1, DR_0
     uint32_t bandwidth = 0; // LoRa 125 kHz
 
@@ -1730,9 +1724,8 @@ static void OnRxWindow2TimerEvent( OS_TIMER timer )
     }
 }
 
-static void OnAckTimeoutTimerEvent( OS_TIMER timer )
+static void OnAckTimeoutTimerEvent( void )
 {
-    (void)(timer);
     OS_TIMER_STOP(AckTimeoutTimer, OS_TIMER_FOREVER);
 
     if( NodeAckRequested == true )
@@ -1751,7 +1744,7 @@ static bool SetNextChannel( TimerTime_t* time )
     uint8_t nbEnabledChannels = 0;
     uint8_t delayTx = 0;
     uint8_t enabledChannels[LORA_MAX_NB_CHANNELS];
-    TimerTime_t nextTxDelay = ( TimerTime_t )( -1 );
+    TimerTime_t nextTxDelay = ( TimerTime_t )( 0 );
 
     memset1( enabledChannels, 0, LORA_MAX_NB_CHANNELS );
 
@@ -1908,7 +1901,8 @@ static void RxWindowSetup( uint32_t freq, int8_t datarate, uint32_t bandwidth, u
         else
         {
             modem = MODEM_LORA;
-            Radio.SetRxConfig( modem, bandwidth, downlinkDatarate, 1, 0, 8, timeout, false, 0, false, 0, 0, true, rxContinuous );
+            // TODO: Find out the reason why SymbTimeout + RFLR_OPMODE_RECEIVER_SINGLE doesn't work. Always using continuous when LoRa.
+            Radio.SetRxConfig( modem, bandwidth, downlinkDatarate, 1, 0, 8, timeout, false, 0, false, 0, 0, true, true /*rxContinuous*/ );
         }
 #elif defined( USE_BAND_915 ) || defined( USE_BAND_915_HYBRID )
         modem = MODEM_LORA;
@@ -2695,7 +2689,8 @@ static LoRaMacStatus_t ScheduleTx( )
     {
         // Send later - prepare timer
         LoRaMacState |= MAC_TX_DELAYED;
-        OS_TIMER_CHANGE_PERIOD(TxDelayedTimer, dutyCycleTimeOff, OS_TIMER_FOREVER);
+        // dutyCycleTimeOff is in OS ticks update with the difference
+        OS_TIMER_CHANGE_PERIOD(TxDelayedTimer, (dutyCycleTimeOff - OS_GET_TICK_COUNT()), OS_TIMER_FOREVER);
         OS_TIMER_START(TxDelayedTimer, OS_TIMER_FOREVER);
 
         return LORAMAC_STATUS_OK;
@@ -3086,7 +3081,7 @@ LoRaMacStatus_t SendFrameOnChannel( ChannelParams_t channel )
     MlmeConfirm.TxTimeOnAir = TxTimeOnAir;
 
     // Starts the MAC layer status check timer
-    OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, MAC_STATE_CHECK_TIMEOUT, OS_TIMER_FOREVER);
+    OS_TIMER_CHANGE_PERIOD(MacStateCheckTimer, OS_MS_2_TICKS(MAC_STATE_CHECK_TIMEOUT), OS_TIMER_FOREVER);
     OS_TIMER_START(MacStateCheckTimer, OS_TIMER_FOREVER);
 
     // Send now
@@ -3095,6 +3090,32 @@ LoRaMacStatus_t SendFrameOnChannel( ChannelParams_t channel )
     LoRaMacState |= MAC_TX_RUNNING;
 
     return LORAMAC_STATUS_OK;
+}
+
+/*!
+ * \brief Function executed on LoRaMac Timeout events
+ */
+static void loramac_timer_cb(OS_TIMER timer)
+{
+  void *cb = NULL;
+
+  if(timer == MacStateCheckTimer){
+    cb = OnMacStateCheckTimerEvent;
+  }
+  if(timer == TxDelayedTimer){
+    cb = OnTxDelayedTimerEvent;
+  }
+  if(timer == RxWindowTimer1){
+    cb = OnRxWindow1TimerEvent;
+  }
+  if(timer == RxWindowTimer2){
+    cb = OnRxWindow2TimerEvent;
+  }
+  if(timer == AckTimeoutTimer){
+    cb = OnAckTimeoutTimerEvent;
+  }
+
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, cb);
 }
 
 LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t *primitives, LoRaMacCallback_t *callbacks )
@@ -3202,35 +3223,35 @@ LoRaMacStatus_t LoRaMacInitialization( LoRaMacPrimitives_t *primitives, LoRaMacC
     if(MacStateCheckTimer == NULL){
       MacStateCheckTimer = OS_TIMER_CREATE("MacStateCheckTimer", \
         OS_MS_2_TICKS(MAC_STATE_CHECK_TIMEOUT), OS_TIMER_FAIL, \
-        (void *) OS_GET_CURRENT_TASK(), OnMacStateCheckTimerEvent);
+        (void *) OS_GET_CURRENT_TASK(), loramac_timer_cb);
 
       OS_ASSERT(MacStateCheckTimer);
     }
     if(TxDelayedTimer == NULL){
       TxDelayedTimer = OS_TIMER_CREATE("TxDelayedTimer", \
         OS_MS_2_TICKS(100), OS_TIMER_FAIL, \
-        (void *) OS_GET_CURRENT_TASK(), OnTxDelayedTimerEvent);
+        (void *) OS_GET_CURRENT_TASK(), loramac_timer_cb);
 
       OS_ASSERT(TxDelayedTimer);
     }
     if(RxWindowTimer1 == NULL){
       RxWindowTimer1 = OS_TIMER_CREATE("RxWindowTimer1", \
         OS_MS_2_TICKS(100), OS_TIMER_FAIL, \
-        (void *) OS_GET_CURRENT_TASK(), OnRxWindow1TimerEvent);
+        (void *) OS_GET_CURRENT_TASK(), loramac_timer_cb);
 
       OS_ASSERT(RxWindowTimer1);
     }
     if(RxWindowTimer2 == NULL){
       RxWindowTimer2 = OS_TIMER_CREATE("RxWindowTimer2", \
         OS_MS_2_TICKS(100), OS_TIMER_FAIL, \
-        (void *) OS_GET_CURRENT_TASK(), OnRxWindow2TimerEvent);
+        (void *) OS_GET_CURRENT_TASK(), loramac_timer_cb);
 
       OS_ASSERT(RxWindowTimer2);
     }
     if(AckTimeoutTimer == NULL){
       AckTimeoutTimer = OS_TIMER_CREATE("AckTimeoutTimer", \
         OS_MS_2_TICKS(100), OS_TIMER_FAIL, \
-        (void *) OS_GET_CURRENT_TASK(), OnAckTimeoutTimerEvent);
+        (void *) OS_GET_CURRENT_TASK(), loramac_timer_cb);
 
       OS_ASSERT(AckTimeoutTimer);
     }
@@ -3469,7 +3490,7 @@ LoRaMacStatus_t LoRaMacMibSetRequestConfirm( MibRequestConfirm_t *mibSet )
                 {
                     // Set the NodeAckRequested indicator to default
                     NodeAckRequested = false;
-                    OnRxWindow2TimerEvent( RxWindowTimer2 );
+                    OnRxWindow2TimerEvent( );
                     break;
                 }
             }

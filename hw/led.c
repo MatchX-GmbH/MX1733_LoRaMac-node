@@ -175,7 +175,7 @@ led_cb(OS_TIMER timer)
 	bool red_inverted = false;
 	bool updated;
 
-	updated = led_update_battery() || !timer;
+	updated = led_update_battery() || (timer == NULL);
 	switch (led_status & LED_FUNC_MASK) {
 	case LED_OFF:
 		on = false;
@@ -221,7 +221,7 @@ led_notify(uint8_t s)
 		return;
 	sys_status = s;
 	if (led_update_status())
-		led_cb(0);
+		led_cb(NULL);
 }
 
 void

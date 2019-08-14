@@ -200,7 +200,7 @@ static void
 gps_uart_rx(OS_TIMER timer)
 {
   (void)(timer);
-  lora_task_notify_event(EVENT_NOTIF_GPS_RX);
+  lora_task_notify_event(EVENT_NOTIF_GPS_RX, NULL);
 }
 
 void gps_rx(void)

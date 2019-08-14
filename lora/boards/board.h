@@ -20,6 +20,8 @@
 
 #include "osal.h"
 
+#include "lora/lora.h"
+
 /*!
  * Structure for the GPIO
  */

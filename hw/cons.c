@@ -312,7 +312,7 @@ uart_isr()
 		}
 		if (!cons_pending) {
 			cons_pending = 1;
-			lora_task_notify_event(EVENT_NOTIF_CONS_RX);
+			lora_task_notify_event(EVENT_NOTIF_CONS_RX, NULL);
 		}
 		break;
 	default:

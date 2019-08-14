@@ -222,20 +222,20 @@ void SX1276Init( RadioEvents_t *events )
 
     // Initialize driver timeout timers
     if(TxTimeoutTimer == NULL){
-      TxTimeoutTimer = OS_TIMER_CREATE("TxTimeoutTimer", OS_MS_2_TICKS(50),
+      TxTimeoutTimer = OS_TIMER_CREATE("TxTimeoutTimer", OS_MS_2_TICKS(500),
         OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), SX1276OnTimeoutIrq);
 
       OS_ASSERT(TxTimeoutTimer);
     }
 
     if(RxTimeoutTimer == NULL){
-      RxTimeoutTimer = OS_TIMER_CREATE("RxTimeoutTimer", OS_MS_2_TICKS(50),
+      RxTimeoutTimer = OS_TIMER_CREATE("RxTimeoutTimer", OS_MS_2_TICKS(500),
         OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), SX1276OnTimeoutIrq);
 
       OS_ASSERT(RxTimeoutTimer);
     }
     if(RxTimeoutSyncWord == NULL){
-      RxTimeoutSyncWord = OS_TIMER_CREATE("RxTimeoutSyncWord", OS_MS_2_TICKS(50),
+      RxTimeoutSyncWord = OS_TIMER_CREATE("RxTimeoutSyncWord", OS_MS_2_TICKS(500),
         OS_TIMER_FAIL, (void *) OS_GET_CURRENT_TASK(), SX1276OnTimeoutIrq);
 
       OS_ASSERT(RxTimeoutSyncWord);
@@ -1061,7 +1061,7 @@ void SX1276SetRx( uint32_t timeout )
     SX1276.Settings.State = RF_RX_RUNNING;
     if( timeout != 0 )
     {
-        OS_TIMER_CHANGE_PERIOD(RxTimeoutTimer, timeout, OS_TIMER_FOREVER);
+        OS_TIMER_CHANGE_PERIOD(RxTimeoutTimer, OS_MS_2_TICKS(timeout), OS_TIMER_FOREVER);
         OS_TIMER_START(RxTimeoutTimer, OS_TIMER_FOREVER);
     }
 
@@ -1072,11 +1072,11 @@ void SX1276SetRx( uint32_t timeout )
         if( rxContinuous == false )
         {
             OS_TIMER_CHANGE_PERIOD(RxTimeoutSyncWord, \
-              (double)( ( 8.0 * ( SX1276.Settings.Fsk.PreambleLen + \
+              OS_MS_2_TICKS((double)( ( 8.0 * ( SX1276.Settings.Fsk.PreambleLen + \
               ( ( SX1276Read( REG_SYNCCONFIG ) & \
                  ~RF_SYNCCONFIG_SYNCSIZE_MASK ) + \
                  1.0 ) + 10.0 ) / \
-              ( double )SX1276.Settings.Fsk.Datarate ) * 1e3 ) + 4, \
+              ( double )SX1276.Settings.Fsk.Datarate ) * 1e3 ) + 4), \
                 OS_TIMER_FOREVER);
             OS_TIMER_START(RxTimeoutSyncWord, OS_TIMER_FOREVER);
         }
@@ -1096,7 +1096,7 @@ void SX1276SetRx( uint32_t timeout )
 
 void SX1276SetTx( uint32_t timeout )
 {
-    OS_TIMER_CHANGE_PERIOD(TxTimeoutTimer, timeout, OS_TIMER_FOREVER);
+    OS_TIMER_CHANGE_PERIOD(TxTimeoutTimer, OS_MS_2_TICKS(timeout), OS_TIMER_FOREVER);
 
     switch( SX1276.Settings.Modem )
     {

@@ -62,7 +62,7 @@
 /*!
  * Class A&B maximum receive window delay in ms
  */
-#define MAX_RX_WINDOW                               3000
+#define MAX_RX_WINDOW                               1000
 
 /*!
  * Maximum allowed gap for the FCNT field

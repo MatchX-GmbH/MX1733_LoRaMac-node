@@ -145,11 +145,14 @@ PRIVILEGED_DATA struct ComplianceTest_s
     uint8_t NbGateways;
 }ComplianceTest;
 
+typedef void ( loramac_cb_t )( void );
+
 PRIVILEGED_DATA static OS_TASK lora_task_handle;
 PRIVILEGED_DATA static OS_TIMER next_tx_timer;
 PRIVILEGED_DATA static OS_TIMER prepare_tx_timer;
 
 PRIVILEGED_DATA static DioIrqHandler **gp_irqHandlers;
+PRIVILEGED_DATA static loramac_cb_t *gp_loramac_cb;
 
 /*!
  * Indicates if a new packet can be sent
@@ -158,15 +161,16 @@ INITIALISED_PRIVILEGED_DATA static bool NextTx = true;
 
 #ifdef DEBUG
 
+static uint8_t pre_state = DEVICE_STATE_INIT;
+
 #ifdef DEBUG_TIME
 static void
 debug_time(void)
 {
-	uint32_t	now = OS_GET_TICK_COUNT();
+	uint32_t	now = OS_TICKS_2_MS(OS_GET_TICK_COUNT());
 
-	printf("%lu:%02lu.%03lu+%02lu ", OS_TICKS_2_MS(now) / 60000,
-	  OS_TICKS_2_MS(now) / 1000 % 60, OS_TICKS_2_MS(now) % 1000,
-	    now - OS_MS_2_TICKS(OS_TICKS_2_MS(now)));
+	printf("%lu:%02lu.%03lu ", now / 60000, \
+	  now / 1000 % 60, now % 1000);
 }
 #else
 #define debug_time()
@@ -234,7 +238,7 @@ static void next_tx_cb(OS_TIMER timer)
   {
     if( mibReq.Param.IsNetworkJoined == true )
     {
-      DeviceState = DEVICE_STATE_SEND;
+      DeviceState = DEVICE_STATE_PREPARE_TX;
       NextTx = true;
     }
     else
@@ -242,7 +246,7 @@ static void next_tx_cb(OS_TIMER timer)
       DeviceState = DEVICE_STATE_JOIN;
     }
   }
-  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
 
 /*!
@@ -258,7 +262,7 @@ static void lora_tx_ready_cb(OS_TIMER timer)
   } else {
     DeviceState = DEVICE_STATE_SEND;
   }
-  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
 
 /*!
@@ -296,7 +300,7 @@ static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
     }
   }
   NextTx = true;
-  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
 
 /*!
@@ -456,7 +460,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
       break;
     }
   }
-  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
 
 /*!
@@ -495,7 +499,7 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
     }
   }
   NextTx = true;
-  lora_task_notify_event(EVENT_NOTIF_LORAMAC);
+  lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
 
 static void
@@ -503,28 +507,32 @@ lora_wkup_int_cb(void)
 {
   if (hw_gpio_get_pin_status(HW_LORA_DIO0_PORT, HW_LORA_DIO0_PIN))
   {
-    lora_task_notify_event(EVENT_NOTIF_LORA_DIO0);
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO0, NULL);
   }
   if (hw_gpio_get_pin_status(HW_LORA_DIO1_PORT, HW_LORA_DIO1_PIN))
   {
-    lora_task_notify_event(EVENT_NOTIF_LORA_DIO1);
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO1, NULL);
   }
   if (hw_gpio_get_pin_status(HW_LORA_DIO2_PORT, HW_LORA_DIO2_PIN))
   {
-    lora_task_notify_event(EVENT_NOTIF_LORA_DIO2);
+    lora_task_notify_event(EVENT_NOTIF_LORA_DIO2, NULL);
   }
 #ifdef FEATURE_USER_BUTTON
   if (hw_gpio_get_pin_status(HW_USER_BTN_PORT, HW_USER_BTN_PIN))
   {
-    lora_task_notify_event(EVENT_NOTIF_BTN_PRESS);
+    lora_task_notify_event(EVENT_NOTIF_BTN_PRESS, NULL);
   }
 #endif
   hw_wkup_reset_interrupt();
 }
 
-void lora_task_notify_event(uint32_t event)
+void lora_task_notify_event(uint32_t event, void *cb)
 {
   OS_TASK_NOTIFY_FROM_ISR(lora_task_handle, event, eSetBits);
+  if(cb)
+  {
+    gp_loramac_cb = cb;
+  }
 }
 
 void
@@ -781,11 +789,19 @@ lora_task_func(void *param)
     }
 
     if (notif & EVENT_NOTIF_LORAMAC) {
-      debug_time();
+      if(gp_loramac_cb != NULL){
+        gp_loramac_cb();
+        gp_loramac_cb = NULL;
+      }
     }
+
 #ifdef DEBUG
-    printf("state %d\r\n", DeviceState);
-    printf("Debug SX1276: %d\r\n", SX1276Read( REG_OPMODE ));
+    if(pre_state != DeviceState){
+      debug_time();
+      printf("state %d\r\n", DeviceState);
+      printf("Debug SX1276: %d\r\n", SX1276Read( REG_OPMODE ));
+      pre_state = DeviceState;
+    }
 #endif
   }
 }
