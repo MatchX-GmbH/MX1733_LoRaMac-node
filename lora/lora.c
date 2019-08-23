@@ -477,6 +477,12 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
     {
       case MLME_JOIN:
       {
+        MibRequestConfirm_t mibReq;
+        mibReq.Type = MIB_NET_ID;
+        LoRaMacMibGetRequestConfirm( &mibReq );
+#ifdef DEBUG
+        printf("netid = %06lx\r\n", mibReq.Param.NetID);
+#endif
         // Status is OK, node has joined the network
         DeviceState = DEVICE_STATE_PREPARE_TX;
         NextTx = true;
@@ -701,9 +707,6 @@ lora_task_func(void *param)
       }
       case DEVICE_STATE_PREPARE_TX:
       {
-#ifdef DEBUG
-        printf("netid = %06lx\r\n", mibReq.Param.NetID);
-#endif
         ad_lora_suspend_sleep(LORA_SUSPEND_LORA, TX_TIMEOUT);
         proto_txstart();
         sampling_since = OS_GET_TICK_COUNT();
@@ -721,7 +724,7 @@ lora_task_func(void *param)
           debug_time();
           printf("lora state %d\r\n", DEVICE_STATE_SEND);
 #endif
-          led_notify(LED_STATE_IDLE);
+          led_notify(LED_STATE_SENDING);
           proto_send_data();
         }
 
@@ -733,8 +736,11 @@ lora_task_func(void *param)
         DeviceState = DEVICE_STATE_SLEEP;
 
         ad_lora_allow_sleep(LORA_SUSPEND_LORA);
+        led_notify(LED_STATE_IDLE);
 
         // Schedule next packet transmission
+        OS_TIMER_CHANGE_PERIOD(next_tx_timer, \
+          sensor_period(), OS_TIMER_FOREVER);
         OS_TIMER_START(next_tx_timer, OS_TIMER_FOREVER);
         break;
       }
@@ -798,8 +804,7 @@ lora_task_func(void *param)
 #ifdef DEBUG
     if(pre_state != DeviceState){
       debug_time();
-      printf("state %d\r\n", DeviceState);
-      printf("Debug SX1276: %d\r\n", SX1276Read( REG_OPMODE ));
+      printf("state: %d, SX1276: %d\r\n", DeviceState, SX1276Read( REG_OPMODE ));
       pre_state = DeviceState;
     }
 #endif

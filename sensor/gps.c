@@ -208,7 +208,7 @@ void gps_rx(void)
 #ifdef DEBUG
   if((!hw_uart_read_buf_empty(HW_UART2)) \
     && (rxlen == 0)){
-    printf("gps rx begin:\r\n");
+    printf("gps rx:\r\n");
   }
 #endif
   while (!hw_uart_read_buf_empty(HW_UART2)) {
@@ -219,9 +219,6 @@ void gps_rx(void)
       continue;
     }
     c = hw_uart_read(HW_UART2);
-#ifdef DEBUG
-    printf("%c", c);
-#endif
     if ((rxbuf[rxlen++] = c) == '\n') {
       if (msgproc(rxbuf, rxlen)){
         if(last_fix.fix != 0){
@@ -239,7 +236,7 @@ void gps_rx(void)
 #ifdef DEBUG
   else
   {
-    printf("\r\ngps rx end.\r\n");
+    printf("gps rx end.\r\n");
   }
 #endif
 }

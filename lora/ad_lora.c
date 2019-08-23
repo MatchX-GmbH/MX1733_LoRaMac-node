@@ -30,7 +30,7 @@ ad_lora_prepare_for_sleep(void)
     taskEXIT_CRITICAL();
   }
   if (!suspends_active) {
-    power(POWER_LORA, false);
+    power(false);
   }
   return !suspends_active;
 }
@@ -38,14 +38,14 @@ ad_lora_prepare_for_sleep(void)
 static void
 ad_lora_sleep_canceled(void)
 {
-  power(POWER_LORA, true);
+  power(true);
 }
 
 static void
 ad_lora_wake_up_ind(bool arg)
 {
   (void)arg;
-  power(POWER_LORA, true);
+  power(true);
 }
 
 static const adapter_call_backs_t	ad_lora_call_backs = {

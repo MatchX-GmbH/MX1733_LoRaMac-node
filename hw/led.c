@@ -26,7 +26,6 @@ PRIVILEGED_DATA static uint8_t	battery_status;
 #define LED_BLINK_NORMAL    0x02
 #define LED_BLINK_RARE      0x03
 #define LED_BLINK_FAST      0x04
-#define LED_BLINK_ALTERNATE 0x05
 
 #define LED_COLOUR_MASK 0x38
 #define LED_RED         0x08
@@ -45,13 +44,9 @@ PRIVILEGED_DATA static OS_TIMER led_timer;
 
 static const uint8_t	led_sys_stati[] = {
 	[LED_STATE_IDLE] = LED_OFF,
-#ifdef FEATURE_LED_RGB
 	[LED_STATE_BOOTING] = LED_BLUE | LED_BLINK_NORMAL,
-#else
-	[LED_STATE_BOOTING] = LED_YELLOW | LED_BLINK_NORMAL,
-#endif
 	[LED_STATE_JOINING] = LED_RED | LED_BLINK_NORMAL,
-	[LED_STATE_SAMPLING_SENSOR] = LED_YELLOW | LED_BLINK_ALTERNATE,
+	[LED_STATE_SAMPLING_SENSOR] = LED_GREEN | LED_BLINK_FAST,
 	[LED_STATE_SENDING] = LED_GREEN | LED_BLINK_NORMAL,
 	[LED_STATE_REBOOTING] = LED_RED | LED_BLINK_FAST,
 };
@@ -59,7 +54,7 @@ static const uint8_t	led_sys_stati[] = {
 static const uint8_t	led_battery_stati[] = {
 	[LED_BATTERY_OK] = LED_OFF,
 	[LED_BATTERY_LOW] = LED_RED | LED_BLINK_RARE,
-	[LED_BATTERY_CHARGING] = LED_RED | LED_BREATH,
+	[LED_BATTERY_CHARGING] = LED_YELLOW | LED_BREATH,
 	[LED_BATTERY_CHARGED] = LED_GREEN | LED_BREATH,
 };
 
@@ -90,18 +85,6 @@ static const uint8_t	led_battery_stati[] = {
 #define LED_ENABLE_BLUE(state)	hw_led_enable_led3(state)
 
 #endif /* FEATURE_LED_RGB_REV */
-
-#elif defined FEATURE_LED_RG
-
-#define LED_SET_RED_BREATH()	hw_led_set_led3_src(HW_LED_SRC3_BREATH)
-#define LED_SET_RED_PWM()	hw_led_set_led3_src(HW_LED_SRC3_PWM4)
-#define LED_SET_GREEN_BREATH()	hw_led_set_led2_src(HW_LED_SRC2_BREATH)
-#define LED_SET_GREEN_PWM()	hw_led_set_led2_src(HW_LED_SRC2_PWM3)
-#define LED_SET_BLUE_BREATH()
-#define LED_SET_BLUE_PWM()
-#define LED_ENABLE_RED(state)	hw_led_enable_led3(state)
-#define LED_ENABLE_GREEN(state)	hw_led_enable_led2(state)
-#define LED_ENABLE_BLUE(state)
 
 #else
 #error "Unknown LED setting"
@@ -172,7 +155,6 @@ led_cb(OS_TIMER timer)
 {
 	PRIVILEGED_DATA static bool	on;
 	uint32_t delay = UPDATE_INTERVAL;
-	bool red_inverted = false;
 	bool updated;
 
 	updated = led_update_battery() || (timer == NULL);
@@ -186,9 +168,6 @@ led_cb(OS_TIMER timer)
 	default:
 		on = updated || !on;
 		switch (led_status & LED_FUNC_MASK) {
-		case LED_BLINK_ALTERNATE:
-			red_inverted = true;
-			/* NO BREAK FALLTHROUGH */
 		case LED_BLINK_NORMAL:
 			delay = NORMAL_BLINK_PERIOD;
 			break;
@@ -202,13 +181,13 @@ led_cb(OS_TIMER timer)
 		}
 		break;
 	}
-	LED_ENABLE_RED((on ^ red_inverted) && !!(led_status & LED_RED));
+	LED_ENABLE_RED(on && !!(led_status & LED_RED));
 	LED_ENABLE_GREEN(on && !!(led_status & LED_GREEN));
 	LED_ENABLE_BLUE(on && !!(led_status & LED_BLUE));
 	OS_ASSERT(led_timer);
 	OS_TIMER_CHANGE_PERIOD(led_timer, delay, OS_TIMER_FOREVER);
 	OS_TIMER_START(led_timer, OS_TIMER_FOREVER);
-	if (on || red_inverted)
+	if (on)
 		ad_lora_suspend_sleep(LORA_SUSPEND_LED, delay);
 	else
 		ad_lora_allow_sleep(LORA_SUSPEND_LED);
@@ -236,10 +215,8 @@ led_init(void)
 	};
 	timer2_config	t2cfg = {
 		.frequency	= HW_TIMER2_MAX_VALUE,
-#ifdef FEATURE_LED_RGB
 		.pwm2_start	= 0,
 		.pwm2_end	= 0xffff,
-#endif
 		.pwm3_start	= 0,
 		.pwm3_end	= 0xffff,
 		.pwm4_start	= 0,
