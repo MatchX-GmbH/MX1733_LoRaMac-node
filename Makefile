@@ -17,19 +17,37 @@ OBJS+=	$(OBJDIR)/main.o \
 	$(OBJDIR)/hw/iox.o \
 	$(OBJDIR)/hw/led.o \
 	$(OBJDIR)/hw/power.o \
-	$(OBJDIR)/lora/boards/sx1276-board.o \
+	$(OBJDIR)/lora/boards/mx1733/delay-board.o\
+	$(OBJDIR)/lora/boards/mx1733/gpio-board.o\
+	$(OBJDIR)/lora/boards/mx1733/mx1733.o\
+	$(OBJDIR)/lora/boards/mx1733/rtc-board.o\
+	$(OBJDIR)/lora/boards/mx1733/spi-board.o\
+	$(OBJDIR)/lora/boards/mx1733/sx1276-board.o \
+	$(OBJDIR)/lora/boards/mx1733/utilities.o\
+	$(OBJDIR)/lora/mac/Region/Region.o \
+	$(OBJDIR)/lora/mac/Region/RegionCommon.o \
+	$(OBJDIR)/lora/mac/Region/RegionEU868.o \
 	$(OBJDIR)/lora/mac/LoRaMac.o \
-	$(OBJDIR)/lora/mac/LoRaMac-api-v3.o \
+	$(OBJDIR)/lora/mac/LoRaMacAdr.o \
+	$(OBJDIR)/lora/mac/LoRaMacClassB.o \
+	$(OBJDIR)/lora/mac/LoRaMacCommands.o \
+	$(OBJDIR)/lora/mac/LoRaMacConfirmQueue.o \
 	$(OBJDIR)/lora/mac/LoRaMacCrypto.o \
+	$(OBJDIR)/lora/mac/LoRaMacParser.o \
+	$(OBJDIR)/lora/mac/LoRaMacSerializer.o \
 	$(OBJDIR)/lora/radio/sx1276/sx1276.o \
-	$(OBJDIR)/lora/system/crypto/aes.o \
-	$(OBJDIR)/lora/system/crypto/cmac.o \
+	$(OBJDIR)/lora/system/soft-se/aes.o \
+	$(OBJDIR)/lora/system/soft-se/cmac.o \
+	$(OBJDIR)/lora/system/soft-se/soft-se.o \
+	$(OBJDIR)/lora/system/delay.o \
+	$(OBJDIR)/lora/system/gpio.o \
+	$(OBJDIR)/lora/system/systime.o \
+	$(OBJDIR)/lora/system/timer.o \
 	$(OBJDIR)/lora/ad_lora.o \
 	$(OBJDIR)/lora/lora.o \
 	$(OBJDIR)/lora/param.o \
 	$(OBJDIR)/lora/proto.o \
 	$(OBJDIR)/lora/upgrade.o \
-	$(OBJDIR)/lora/utilities.o \
 	$(OBJDIR)/sensor/bat.o \
 	$(OBJDIR)/sensor/gps.o \
 	$(OBJDIR)/sensor/light.o \
@@ -142,7 +160,7 @@ CFLAGS+=	-Ddg_configBLACK_ORCA_IC_REV=BLACK_ORCA_IC_REV_A \
 CFLAGS+=	-DRELEASE_BUILD
 CFLAGS+=	-I. -Ilora -Ilora/boards -Ilora/mac \
 			-Ilora/radio -Ilora/radio/sx1276 \
-			-Ilora/system -Ilora/system/crypto \
+			-Ilora/system -Ilora/system/soft-se \
 		-I$(SDKDIR)/sdk/bsp/include -I$(SDKDIR)/sdk/bsp/config \
 		-I$(SDKDIR)/sdk/bsp/peripherals/include \
 		-I$(SDKDIR)/sdk/bsp/memory/include \
@@ -207,7 +225,7 @@ LDFLAGS=	-g -Os -Xlinker --gc-sections -Xlinker -Map=$(MAPTARGET) \
 		-L$(SDKDIR)/sdk/interfaces/ble_stack/DA14681-01-Release \
 		--specs=nano.specs --specs=nosys.specs \
 		$(LDSCRIPTFLAGS)
-LDADD=		-lble_stack_da14681_01
+LDADD=		-lble_stack_da14681_01 -lm
 
 all: $(TARGET)
 	arm-none-eabi-size -B $(ELFTARGET)

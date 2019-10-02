@@ -1,60 +1,116 @@
-/*
- * board.h
+/*!
+ * \file      board.h
  *
- *  Created on: 7 Aug 2019
- *      Author: balog
+ * \brief     Target board general functions implementation
+ *
+ * \copyright Revised BSD License, see section \ref LICENSE.
+ *
+ * \code
+ *                ______                              _
+ *               / _____)             _              | |
+ *              ( (____  _____ ____ _| |_ _____  ____| |__
+ *               \____ \| ___ |    (_   _) ___ |/ ___)  _ \
+ *               _____) ) ____| | | || |_| ____( (___| | | |
+ *              (______/|_____)_|_|_| \__)_____)\____)_| |_|
+ *              (C)2013-2017 Semtech
+ *
+ * \endcode
+ *
+ * \author    Miguel Luis ( Semtech )
+ *
+ * \author    Gregory Cristian ( Semtech )
  */
+#ifndef __BOARD_H__
+#define __BOARD_H__
 
-#ifndef LORA_BOARD_H_
-#define LORA_BOARD_H_
-
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <stdint.h>
-
-#include <hw_gpio.h>
-#include <hw_spi.h>
-#include <hw_wkup.h>
-
-#include "osal.h"
-
-#include "lora/lora.h"
-
+#include "utilities.h"
 /*!
- * Structure for the GPIO
+ * Possible power sources
  */
-typedef struct
+enum BoardPowerSources
 {
-  HW_GPIO_PORT port;
-  HW_GPIO_PIN pin;
-}Gpio_t;
+    USB_POWER = 0,
+    BATTERY_POWER,
+};
 
 /*!
- * Structure for the SPI
+ * \brief Initializes the mcu.
  */
-typedef struct
-{
-  spi_config *spi_conf;
-}Spi_t;
+void BoardInitMcu( void );
 
 /*!
- * \brief Timer time variable definition
+ * \brief Resets the mcu.
  */
-#ifndef TimerTime_t
-typedef uint32_t TimerTime_t;
-#endif
+void BoardResetMcu( void );
 
-#include "hw/hw.h"
-#include "lora/lora.h"
-#include "lora/utilities.h"
-#include "lora/radio/radio.h"
-#include "lora/radio/sx1276/sx1276.h"
-#include "lora/boards/sx1276-board.h"
+/*!
+ * \brief Initializes the boards peripherals.
+ */
+void BoardInitPeriph( void );
 
-#define DelayMs(ms)  OS_DELAY_MS(ms)
+/*!
+ * \brief De-initializes the target board peripherals to decrease power
+ *        consumption.
+ */
+void BoardDeInitMcu( void );
 
-#define USE_BAND_868
+/*!
+ * \brief Gets the current potentiometer level value
+ *
+ * \retval value  Potentiometer level ( value in percent )
+ */
+uint8_t BoardGetPotiLevel( void );
 
-#endif /* LORA_BOARD_H_ */
+/*!
+ * \brief Measure the Battery voltage
+ *
+ * \retval value  battery voltage in volts
+ */
+uint32_t BoardGetBatteryVoltage( void );
+
+/*!
+ * \brief Get the current battery level
+ *
+ * \retval value  battery level [  0: USB,
+ *                                 1: Min level,
+ *                                 x: level
+ *                               254: fully charged,
+ *                               255: Error]
+ */
+uint8_t BoardGetBatteryLevel( void );
+
+/*!
+ * Returns a pseudo random seed generated using the MCU Unique ID
+ *
+ * \retval seed Generated pseudo random seed
+ */
+uint32_t BoardGetRandomSeed( void );
+
+/*!
+ * \brief Gets the board 64 bits unique ID
+ *
+ * \param [IN] id Pointer to an array that will contain the Unique ID
+ */
+void BoardGetUniqueId( uint8_t *id );
+
+/*!
+ * \brief Manages the entry into ARM cortex deep-sleep mode
+ */
+void BoardLowPowerHandler( void );
+
+/*!
+ * \brief Get the board power source
+ *
+ * \retval value  power source [0: USB_POWER, 1: BATTERY_POWER]
+ */
+uint8_t GetBoardPowerSource( void );
+
+/*!
+ * \brief Get the board version
+ *
+ * \retval value  Version
+ */
+Version_t BoardGetVersion( void );
+
+#endif // __BOARD_H__

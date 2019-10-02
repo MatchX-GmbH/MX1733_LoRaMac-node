@@ -24,6 +24,8 @@
 #ifndef CUSTOM_CONFIG_QSPI_SUOTA_H_
 #define CUSTOM_CONFIG_QSPI_SUOTA_H_
 
+#define REGION_EU868
+
 #include "bsp_definitions.h"
 
 #define CONFIG_USE_BLE

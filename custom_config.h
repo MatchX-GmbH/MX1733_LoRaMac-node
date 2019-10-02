@@ -27,6 +27,8 @@
 #ifndef CUSTOM_CONFIG_QSPI_H_
 #define CUSTOM_CONFIG_QSPI_H_
 
+#define REGION_EU868
+
 #define dg_configDISABLE_BACKGROUND_FLASH_OPS   (1)
 
 #include "bsp_definitions.h"

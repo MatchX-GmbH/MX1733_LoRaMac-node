@@ -2,8 +2,8 @@
 
 #include "osal.h"
 
-#include "hw/button.h"
 #include "hw/hw.h"
+#include "hw/button.h"
 #include "lora/proto.h"
 #include "lora/upgrade.h"
 
