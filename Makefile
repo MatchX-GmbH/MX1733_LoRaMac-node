@@ -24,9 +24,9 @@ OBJS+=	$(OBJDIR)/main.o \
 	$(OBJDIR)/lora/boards/mx1733/spi-board.o\
 	$(OBJDIR)/lora/boards/mx1733/sx1276-board.o \
 	$(OBJDIR)/lora/boards/mx1733/utilities.o\
-	$(OBJDIR)/lora/mac/Region/Region.o \
-	$(OBJDIR)/lora/mac/Region/RegionCommon.o \
-	$(OBJDIR)/lora/mac/Region/RegionEU868.o \
+	$(OBJDIR)/lora/mac/region/Region.o \
+	$(OBJDIR)/lora/mac/region/RegionCommon.o \
+	$(OBJDIR)/lora/mac/region/RegionEU868.o \
 	$(OBJDIR)/lora/mac/LoRaMac.o \
 	$(OBJDIR)/lora/mac/LoRaMacAdr.o \
 	$(OBJDIR)/lora/mac/LoRaMacClassB.o \
