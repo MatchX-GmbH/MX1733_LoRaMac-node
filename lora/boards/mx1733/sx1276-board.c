@@ -266,16 +266,16 @@ void SX1276SetAntSwLowPower( bool status )
 
 void SX1276AntSwInit( void )
 {
-  hw_gpio_set_pin_function(HW_LORA_RX_PORT, HW_LORA_RX_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
-  hw_gpio_set_pin_function(HW_LORA_TX_PORT, HW_LORA_TX_PIN,
-    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
+//  hw_gpio_set_pin_function(HW_LORA_RX_PORT, HW_LORA_RX_PIN,
+//    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
+//  hw_gpio_set_pin_function(HW_LORA_TX_PORT, HW_LORA_TX_PIN,
+//    HW_GPIO_MODE_OUTPUT, HW_GPIO_FUNC_GPIO);
 }
 
 void SX1276AntSwDeInit( void )
 {
-  hw_gpio_set_inactive(HW_LORA_RX_PORT, HW_LORA_RX_PIN);
-  hw_gpio_set_inactive(HW_LORA_TX_PORT, HW_LORA_TX_PIN);
+//  hw_gpio_set_inactive(HW_LORA_RX_PORT, HW_LORA_RX_PIN);
+//  hw_gpio_set_inactive(HW_LORA_TX_PORT, HW_LORA_TX_PIN);
 }
 
 void SX1276SetAntSw( uint8_t opMode )

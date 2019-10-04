@@ -21,7 +21,7 @@
 #include "lora/lora.h"
 
 // MCU Wake Up Time
-#define MIN_ALARM_DELAY                             3 // in ticks
+#define MIN_ALARM_DELAY     3 // in ticks
 
 /*!
  * RTC timer context
@@ -137,7 +137,7 @@ void RtcSetAlarm( uint32_t timeout )
   OS_ASSERT(RtcTimerContext.timer_handle);
 
   OS_TIMER_CHANGE_PERIOD(RtcTimerContext.timer_handle, \
-    timeout, OS_TIMER_FOREVER);
+    timeout - OS_MS_2_TICKS(35), OS_TIMER_FOREVER);
 
   RtcStartAlarm( timeout );
 }
