@@ -168,31 +168,32 @@ debug_time(void)
  */
 static void JoinNetwork( void )
 {
-    LoRaMacStatus_t status;
-    MlmeReq_t mlmeReq;
-    mlmeReq.Type = MLME_JOIN;
-    mlmeReq.Req.Join.Datarate = LORAWAN_DEFAULT_DATARATE;
+  LoRaMacStatus_t status;
+  MlmeReq_t mlmeReq;
+  mlmeReq.Type = MLME_JOIN;
+  mlmeReq.Req.Join.Datarate = LORAWAN_DEFAULT_DATARATE;
 
-    // Starts the join procedure
-    status = LoRaMacMlmeRequest( &mlmeReq );
+  // Starts the join procedure
+  status = LoRaMacMlmeRequest( &mlmeReq );
 #ifdef DEBUG
-    printf( "\r\n###### ===== MLME-Request - MLME_JOIN ==== ######\r\n" );
+  debug_time();
+  printf( "MLME-Request - MLME_JOIN\r\n" );
 #ifdef DEBUG_STATE
-    printf( "STATUS      : %d\r\n", status );
+  printf( "STATUS      : %d\r\n", status );
 #endif
 #endif
 
-    if( status == LORAMAC_STATUS_OK )
-    {
+  if( status == LORAMAC_STATUS_OK )
+  {
 #ifdef DEBUG
-        printf( "###### ===== JOINING ==== ######\r\n" );
+    printf( "JOINING\r\n" );
 #endif
-        DeviceState = DEVICE_STATE_SLEEP;
-    }
-    else
-    {
-        DeviceState = DEVICE_STATE_CYCLE;
-    }
+    DeviceState = DEVICE_STATE_SLEEP;
+  }
+  else
+  {
+    DeviceState = DEVICE_STATE_CYCLE;
+  }
 }
 
 void
@@ -380,6 +381,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
   {
     // Implementation of the downlink messages from server.
     if(mcpsIndication->BufferSize > 1){
+      debug_time();
       proto_handle(mcpsIndication->Port, mcpsIndication->Buffer, \
         mcpsIndication->BufferSize);
     }
@@ -405,7 +407,8 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
         mibReq.Type = MIB_NET_ID;
         LoRaMacMibGetRequestConfirm( &mibReq );
 #ifdef DEBUG
-        printf("netid = %06lx\r\n", mibReq.Param.NetID);
+        debug_time();
+        printf("JOINED: netid = %06lx\r\n", mibReq.Param.NetID);
 #endif
         // Status is OK, node has joined the network
         DeviceState = DEVICE_STATE_PREPARE_TX;
@@ -442,29 +445,30 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
  */
 static void MlmeIndication( MlmeIndication_t *mlmeIndication )
 {
-    if( mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_BEACON_LOCKED )
-    {
+  if( mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_BEACON_LOCKED )
+  {
 #ifdef DEBUG
-        printf( "\r\n###### ===== MLME-Indication ==== ######\r\n" );
+    debug_time();
+    printf( "MLME-Indication\r\n" );
 #ifdef DEBUG_STATE
-        printf( "STATUS      : %s\r\n", mlmeIndication->Status);
+    printf( "STATUS      : %s\r\n", mlmeIndication->Status);
 #endif
 #endif
-    }
-    if( mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK )
+  }
+  if( mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK )
+  {
+  }
+  switch( mlmeIndication->MlmeIndication )
+  {
+    case MLME_SCHEDULE_UPLINK:
     {
+      // The MAC signals that we shall provide an uplink as soon as possible
+      proto_send_data( );
+      break;
     }
-    switch( mlmeIndication->MlmeIndication )
-    {
-        case MLME_SCHEDULE_UPLINK:
-        {
-          // The MAC signals that we shall provide an uplink as soon as possible
-          proto_send_data( );
-            break;
-        }
-        default:
-            break;
-    }
+    default:
+      break;
+  }
 }
 
 void OnMacProcessNotify( void )
