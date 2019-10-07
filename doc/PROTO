@@ -1,0 +1,139 @@
+Protocol
+========
+
+port = TBD (at the moment: 0x01)
+
+Quick experiments with Gimasi's Loraduino/Tuino cloud suggest
+that the maximum payload length is 0x33 (51) bytes.
+
+Payload is consisting of several commands in a Type-Length-Value
+(TLV) format.  The first byte is consisting of Type (bits [7:4]),
+defining the command, and Length (bits [3:0]), the length of the
+arguments in bytes.  If the Length bits are 0xF (binary 1111),
+the command has its length specified in bits [5:0] of the second
+byte.
+
+Downlink commands are as follows:
+
+Number	Name		Length	Description
+------	----		------	-----------
+
+0	Get/set params	1	Get parameter described by first
+				byte.
+			>=2	Set parameter described by first
+				byte to the value specified in
+				the rest of the message.
+
+				Parameters are as follows:
+
+				param	len	description
+				0	6	DevEUI-48 and BLE
+						MAC address (MSBF)
+				1	8	AppEUI-64 (MSBF)
+				2	16	AppKey
+						(write-only)
+				3	1	Sensor period:
+						0	default
+						1	10 sec
+						2	30 sec
+						3	 1 min
+						4	 2 min
+						5	 5 min
+						6	10 min
+						7	30 min
+						8	 1 hour
+						9	 2 hours
+						10	 5 hours
+						11	12 hours
+				4	1	Minimal LoRa Spread Factor
+						Valid values: 7-12
+
+				Parameters 0, 1, 2 and 4 are
+				actualized after reboot.
+
+1	Reboot/Upgrade	0	Reboot the mote immediately.
+			1	Reboot the mote after the
+				specified timeout; optionally
+				turn BLE and SUOTA on for
+				upgrades.  The argument is as
+				follows:
+				bit [7]:
+					0	just reboot
+					1	BLE on
+				bits [6:3]:
+						Reserved
+				bits [2:0]:
+					0	TBD
+					1	5 minutes
+					2	15 minutes
+					3	30 minutes
+					4	1 hour
+					5	2 hours
+					6	4 hours
+					7	TBD
+
+Uplink reports are as follows:
+
+Number	Name		Length	Description
+------	----		------	-----------
+0	Param value	>=2	Response to the "Get params"
+				command.  The first byte is the
+				param number, the rest are the
+				value.
+1	Sensor data	>=1	Sensor data.
+2	Battery level	1	Battery level in 10mV steps from
+				2V (0 = 2V, 255 = 4.55V).
+
+Sensor data consists of a byte signifying the sensor type, as
+defined in sensor.c, and zero or more bytes of sensor data.  The
+defined types and corresponding data formats are:
+
+Number	Name	Data length	Description
+------	----	-----------	-----------
+0	Unknown	0		No data.
+1	GPS	1 or 11		Node moved or GPS coordinates.
+2	Temp	1 or 2		Temperature.
+
+GPS data format is as follows:
+
+When data length is 1:
+
+Offset	Length	Description
+------	------	-----------
+0	1	Indicates whether the node has moved since last
+		GPS fix.  Possible values are:
+		0	Node is stable since last GPS fix
+		1	Node has moved, or has not received a GPS
+			fix since boot; waiting for GPS fix
+
+When data length is 11:
+
+Offset	Length	Description
+------	------	-----------
+0	1	$GPGGA Position Fix Indicator.  Possible values
+		are:
+		0	Fix not available or invalid
+		1	GPS SPS Mode, fix valid
+		2	Differential GPS, SPS Mode, fix valid
+		6	Dead Reckoning Mode, fix valid
+1	4	Lattitude in 1/1000 of minutes, as little-endian
+		int32.  Positive is north, negative is south.  To
+		get the value in degrees, divide by 600000.
+5	4	Longitude in 1/1000 of minutes, as little-endian
+		int32.  Positive is east, negative is west.  To
+		get the value in degrees, divide by 600000.
+9	2	Altitude above geoid mean sea level in decimetres
+		(0.1m), as little-endian int16.
+
+The format of GPS data is subject to change.
+
+Temperature data is 1 or 2 bytes.  The format is as follows:
+
+Offset	Length	Description
+------	------	-----------
+0	1	Temperature in degrees Celsius as a signed
+		int8_t, giving the range between -128 and +127.
+		Temperatures outside this range are not sent.
+1	1	If present, fractional temperature in 1/256th
+		degrees Celsius as a unsigned uint8_t.  Typically
+		only the most significant 3 bits hold a value.

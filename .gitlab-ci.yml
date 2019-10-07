@@ -1,0 +1,55 @@
+image: ubuntu:xenial
+stages:
+    - build 
+    - analyse
+    - deploy
+
+build:firmware:
+    stage: build 
+
+    before_script:
+        - dpkg --add-architecture i386
+        - apt-get update -qq
+        - apt-get install -y make gcc-arm-none-eabi git p7zip-full wget libncurses5:i386 libstdc++6:i386 zlib1g:i386
+        - cd ${CI_PROJECT_DIR}/.. && wget https://github.com/git-lfs/git-lfs/releases/download/v2.7.0/git-lfs-linux-amd64-v2.7.0.tar.gz
+        - cd ${CI_PROJECT_DIR}/.. && tar -xvf git-lfs-linux-amd64-v2.7.0.tar.gz && ./install.sh
+        - cd ${CI_PROJECT_DIR}/.. && git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/matchx/dialog-sc-sdk.git --branch DA1468x_DA15xxx_SDK_1.0.14.1081
+        - cd ${CI_PROJECT_DIR}/.. && 7z x dialog-sc-sdk/DA1468x_DA15xxx_SDK_1.0.14.1081.zip 
+
+    script:
+        - cd ${CI_PROJECT_DIR} && make image
+
+    artifacts:
+        paths:
+            - obj/minimal.img
+            - obj/minimal.bin
+            - obj/minimal.elf
+
+analyse:cppcheck:
+    stage: analyse
+
+    before_script:
+        - apt-get update -qq
+        - apt-get install -y python python3 wget make gcc g++ python-pygments
+        - cd ${CI_PROJECT_DIR}/.. && wget https://github.com/danmar/cppcheck/archive/1.87.tar.gz
+        - cd ${CI_PROJECT_DIR}/.. && tar -xvf 1.87.tar.gz
+        - cd ${CI_PROJECT_DIR}/../cppcheck-1.87 && make
+
+    script:
+        - cd ${CI_PROJECT_DIR}
+        - mkdir -p cppcheck
+        - ${CI_PROJECT_DIR}/../cppcheck-1.87/cppcheck . --enable=all --inconclusive --force -idoc -ildscripts -iobj 
+        - ${CI_PROJECT_DIR}/../cppcheck-1.87/cppcheck . --enable=all --inconclusive --xml --force -idoc -ildscripts -iobj 2> cppcheck/result.xml
+        - ${CI_PROJECT_DIR}/../cppcheck-1.87/htmlreport/cppcheck-htmlreport --source-dir=. --report-dir=cppcheck --file=cppcheck/result.xml
+
+    artifacts:
+        paths:
+            - cppcheck/
+
+pages:
+      stage: deploy
+      script:
+            - mv cppcheck/ public/
+      artifacts:
+          paths:
+              - public

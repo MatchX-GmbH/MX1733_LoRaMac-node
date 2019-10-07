@@ -1,0 +1,9 @@
+obj/
+cli_gdb_server.log
+cli_programmer.ini
+jlink.log
+cscope.*
+.*.swp
+.settings/
+DA14681-01-Release_QSPI_SUOTA/
+DA14681-01-Debug_QSPI_SUOTA/
