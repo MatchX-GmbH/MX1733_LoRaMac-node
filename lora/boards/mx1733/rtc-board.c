@@ -7,7 +7,9 @@
  *
  */
 #include "osal.h"
+#include "sys_rtc.h"
 
+#include <stdio.h>
 #include <math.h>
 #include <time.h>
 #include "utilities.h"
@@ -22,6 +24,8 @@
 
 // MCU Wake Up Time
 #define MIN_ALARM_DELAY     3 // in ticks
+
+#define RTC_TICKS_IN_SEC    32768
 
 /*!
  * RTC timer context
@@ -66,7 +70,7 @@ void RtcInit( void )
  */
 uint32_t RtcSetTimerContext( void )
 {
-  RtcTimerContext.Time = OS_GET_TICK_COUNT();
+  RtcTimerContext.Time = RtcGetTimerValue();
   return ( uint32_t )RtcTimerContext.Time;
 }
 
@@ -99,7 +103,7 @@ uint32_t RtcGetMinimumTimeout( void )
  */
 uint32_t RtcMs2Tick( uint32_t milliseconds )
 {
-  return OS_MS_2_TICKS(milliseconds);
+  return ( (milliseconds * RTC_TICKS_IN_SEC) / 1000 );
 }
 
 /*!
@@ -110,7 +114,7 @@ uint32_t RtcMs2Tick( uint32_t milliseconds )
  */
 uint32_t RtcTick2Ms( uint32_t tick )
 {
-  return OS_TICKS_2_MS(tick);
+  return ( (tick * 1000) / RTC_TICKS_IN_SEC );
 }
 
 /*!
@@ -136,9 +140,6 @@ void RtcSetAlarm( uint32_t timeout )
 {
   OS_ASSERT(RtcTimerContext.timer_handle);
 
-  OS_TIMER_CHANGE_PERIOD(RtcTimerContext.timer_handle, \
-    timeout - OS_MS_2_TICKS(35), OS_TIMER_FOREVER);
-
   RtcStartAlarm( timeout );
 }
 
@@ -153,22 +154,31 @@ void RtcStartAlarm( uint32_t timeout )
 {
   OS_ASSERT(RtcTimerContext.timer_handle);
 
+  uint32_t period = OS_MS_2_TICKS(RtcTick2Ms(timeout));
+
+  OS_TIMER_CHANGE_PERIOD(RtcTimerContext.timer_handle, \
+    period, OS_TIMER_FOREVER);
+
   OS_TIMER_START(RtcTimerContext.timer_handle, OS_TIMER_FOREVER);
+
+#ifdef DEBUG
+  printf("RTC Start Alarm:%ld + %ld\r\n", TimerGetCurrentTime(), RtcTick2Ms(timeout));
+#endif
 }
 
 uint32_t RtcGetTimerValue( void )
 {
-  return OS_GET_TICK_COUNT();
+  return (rtc_get() & 0xFFFFFFFF);
 }
 
 uint32_t RtcGetTimerElapsedTime( void )
 {
-  return( ( uint32_t )( OS_GET_TICK_COUNT() - RtcTimerContext.Time ) );
+  return( ( uint32_t )( RtcGetTimerValue() - RtcTimerContext.Time ) );
 }
 
 uint32_t RtcGetCalendarTime( uint16_t *milliseconds )
 {
-  uint32_t ticks = OS_GET_TICK_COUNT();
+  uint32_t ticks = RtcGetTimerValue();
   *milliseconds = RtcTick2Ms( ticks ) % 1000;
   return (RtcTick2Ms(ticks) / 1000);
 }

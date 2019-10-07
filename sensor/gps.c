@@ -14,7 +14,7 @@
 
 #ifdef FEATURE_SENSOR_GPS
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #include <stdio.h>

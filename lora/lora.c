@@ -29,6 +29,7 @@
 
 #define DEBUG
 #define DEBUG_TIME
+//#define DEBUG_STATE
 //#define BLE_ALWAYS_ON
 
 #define MAX_SENSOR_SAMPLE_TIME	OS_MS_2_TICKS(2 * 1000)
@@ -143,7 +144,9 @@ INITIALISED_PRIVILEGED_DATA static bool NextTx = true;
 
 #ifdef DEBUG
 
+#ifdef DEBUG_STATE
 static uint8_t pre_state = DEVICE_STATE_INIT;
+#endif
 
 #ifdef DEBUG_TIME
 static void
@@ -174,7 +177,9 @@ static void JoinNetwork( void )
     status = LoRaMacMlmeRequest( &mlmeReq );
 #ifdef DEBUG
     printf( "\r\n###### ===== MLME-Request - MLME_JOIN ==== ######\r\n" );
+#ifdef DEBUG_STATE
     printf( "STATUS      : %d\r\n", status );
+#endif
 #endif
 
     if( status == LORAMAC_STATUS_OK )
@@ -373,7 +378,11 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
 
   if( mcpsIndication->RxData == true )
   {
-    // Compliance Test stuff no need for our application.
+    // Implementation of the downlink messages from server.
+    if(mcpsIndication->BufferSize > 1){
+      proto_handle(mcpsIndication->Port, mcpsIndication->Buffer, \
+        mcpsIndication->BufferSize);
+    }
   }
   lora_task_notify_event(EVENT_NOTIF_LORAMAC, NULL);
 }
@@ -437,7 +446,9 @@ static void MlmeIndication( MlmeIndication_t *mlmeIndication )
     {
 #ifdef DEBUG
         printf( "\r\n###### ===== MLME-Indication ==== ######\r\n" );
-        //printf( "STATUS      : %s\r\n", EventInfoStatusStrings[mlmeIndication->Status] );
+#ifdef DEBUG_STATE
+        printf( "STATUS      : %s\r\n", mlmeIndication->Status);
+#endif
 #endif
     }
     if( mlmeIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK )
@@ -575,8 +586,9 @@ lora_task_func(void *param)
         LoRaMacCallbacks.MacProcessNotify = OnMacProcessNotify;
         status = LoRaMacInitialization( &LoRaMacPrimitives, &LoRaMacCallbacks, ACTIVE_REGION );
 
-        printf("status: %d\r\n", status);
-
+#ifdef DEBUG_STATE
+        printf("LoRaMacInitialization status: %d\r\n", status);
+#endif
         mibReq.Type = MIB_DEV_EUI;
         mibReq.Param.DevEui = param_get_addr(PARAM_DEV_EUI);
         LoRaMacMibSetRequestConfirm( &mibReq );
@@ -689,7 +701,6 @@ lora_task_func(void *param)
         {
 #ifdef DEBUG
           debug_time();
-          printf("lora state %d\r\n", DEVICE_STATE_SEND);
 #endif
           led_notify(LED_STATE_SENDING);
           proto_send_data();
@@ -768,7 +779,7 @@ lora_task_func(void *param)
       }
     }
 
-#ifdef DEBUG
+#ifdef DEBUG_STATE
     if(pre_state != DeviceState){
       debug_time();
       printf("state: %d, SX1276: %d, LR_CONF: %d\r\n", DeviceState, SX1276Read( REG_OPMODE ), SX1276Read(REG_LR_PACONFIG));

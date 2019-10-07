@@ -806,6 +806,9 @@ static void OnRadioTxDone( void )
 static void OnRadioRxDone( uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr )
 {
     RxDoneParams.LastRxDone = TimerGetCurrentTime( );
+#ifdef DEBUG
+    printf("RxDone:%d\r\n", RxDoneParams.LastRxDone);
+#endif
     RxDoneParams.Payload = payload;
     RxDoneParams.Size = size;
     RxDoneParams.Rssi = rssi;
@@ -842,7 +845,9 @@ static void OnRadioRxError( void )
 static void OnRadioRxTimeout( void )
 {
     LoRaMacRadioEvents.Events.RxTimeout = 1;
-
+#ifdef DEBUG
+    printf("RxTimeout:%d\r\n",TimerGetCurrentTime());
+#endif
     if( ( MacCtx.MacCallbacks != NULL ) && ( MacCtx.MacCallbacks->MacProcessNotify != NULL ) )
     {
         MacCtx.MacCallbacks->MacProcessNotify( );
@@ -2605,6 +2610,9 @@ static void RxWindowSetup( TimerEvent_t* rxTimer, RxConfigParams_t* rxConfig )
 
     if( RegionRxConfig( MacCtx.NvmCtx->Region, rxConfig, ( int8_t* )&MacCtx.McpsIndication.RxDatarate ) == true )
     {
+#ifdef DEBUG
+        printf("Radio.Rx:%ld\r\n",TimerGetCurrentTime());
+#endif
         Radio.Rx( MacCtx.NvmCtx->MacParams.MaxRxWindow );
         MacCtx.RxSlot = rxConfig->RxSlot;
     }
@@ -2796,7 +2804,9 @@ LoRaMacStatus_t SendFrameOnChannel( uint8_t channel )
 
     // Send now
     Radio.Send( MacCtx.PktBuffer, MacCtx.PktBufferLen );
-
+#ifdef DEBUG
+    printf("Radio.Send:%d\r\n",TimerGetCurrentTime());
+#endif
     return LORAMAC_STATUS_OK;
 }
 
