@@ -17,6 +17,7 @@
 //#define DEBUG
 
 #ifdef DEBUG
+//#define DEBUG_GSV
 #include <stdio.h>
 #include <unistd.h>
 #endif
@@ -44,7 +45,53 @@ enum {
   GPGGA_AGE_DIFF,		/* Age of Diff. Corr. */
   GPGGA_STATION_ID,	/* Diff. Ref. Station ID */
 };
+
+#ifdef DEBUG_GSV
+
+/* $GPGSV,1,1,00*79 */
+/* $GPGSV,3,1,11,09,77,234,,23,73,076,,06,55,267,,03,37,114,*75 */
+/* $GPGSV,3,1,11,26,68,023,37,15,64,251,33,05,45,058,34,29,33,253,33*75 */
+enum {
+  GPGSV_MSGID,    /* Message ID */
+  GPGSV_MSGS,   /* Number of Messages */
+  GPGSV_MSGNO,    /* Message Number */
+  GPGSV_SAT,    /* Satellites in View */
+};
+#define GPGSV_SAT_BASE    (GPGSV_SAT + 1)
+
+enum {
+  GPGSV_SAT_ID,   /* Satellite ID */
+  GPGSV_SAT_ELEV,   /* Elevation */
+  GPGSV_SAT_AZ,   /* Asimuth */
+  GPGSV_SAT_SNR,    /* SNR (C/N0) */
+};
+#define GPGSV_SAT_FIELDS  (GPGSV_SAT_SNR + 1)
+#define GPGSV_MAX_SAT   4
+
+#define MAX_SATS  32
+
+struct sat {
+  uint8_t id;
+  uint8_t snr;
+} __attribute__((packed));
+
+PRIVILEGED_DATA struct sat  sat[MAX_SATS];
+PRIVILEGED_DATA uint8_t   sats;
+
+#define SATS_START  0
+#define SATS_RECEIVING  1
+#define SATS_DONE 2
+PRIVILEGED_DATA static uint8_t  sats_status;
+
+static const char gpgsv[] = "$GPGSV";
+
+#define MAX_FIELDS  (GPGSV_SAT_BASE + GPGSV_SAT_FIELDS * GPGSV_MAX_SAT)
+
+#else
+
 #define MAX_FIELDS	(GPGGA_STATION_ID + 1)
+
+#endif
 
 struct datapart {
   char	*s;
@@ -169,6 +216,64 @@ proc_gpgga(char *data[])
   }
 }
 
+#ifdef DEBUG_GSV
+
+static void
+gps_print_sats()
+{
+  int i;
+  for (i = 0; i < sats; i++)
+    printf("gps satellite %2d, snr %2d\r\n", sat[i].id, sat[i].snr);
+}
+
+static void
+proc_gpgsv(char *data[], int fields)
+{
+  const char  *errstr;
+  int    i, msgs, msgno, tots;
+
+#ifdef DEBUG
+  printf("gsv\r\n");
+#endif
+  msgs = strtonum(data[GPGSV_MSGS], 0, 16, &errstr);
+  if (errstr)
+    return;
+  msgno = strtonum(data[GPGSV_MSGNO], 0, 16, &errstr);
+  if (errstr)
+    return;
+  tots = strtonum(data[GPGSV_SAT], 0, MAX_SATS, &errstr);
+  if (errstr)
+    return;
+  if (msgno == 1 && sats_status != SATS_DONE) {
+    sats_status = SATS_RECEIVING;
+    sats = 0;
+  } else if (sats_status != SATS_RECEIVING)
+    return;
+  for (i = GPGSV_SAT_BASE;
+      i + GPGSV_SAT_FIELDS - 1 <= fields && sats < tots;
+      i += GPGSV_SAT_FIELDS, sats++) {
+    sat[sats].id = strtonum(data[i + GPGSV_SAT_ID], 1, MAX_SATS,
+        &errstr);
+    if (errstr)
+      return;
+    if (fields <= i + GPGSV_SAT_SNR ||
+        *data[i + GPGSV_SAT_SNR] == '\0') {
+      sat[sats].snr = -1; // XXX
+    } else {
+      sat[sats].snr = strtonum(data[i + GPGSV_SAT_SNR], 1, 99,
+          &errstr);
+      if (errstr)
+        return;
+    }
+  }
+  if (msgno == msgs) {
+    sats_status = SATS_DONE;
+    gps_print_sats();
+  }
+}
+
+#endif
+
 static bool
 msgproc(char *msg, int len)
 {
@@ -189,9 +294,17 @@ msgproc(char *msg, int len)
       break;
     *p = '\0';
   }
-  if (i && strcmp(data[0], gpgga) == 0) {
-    proc_gpgga(data);
-    return true;
+  if (i) {
+    if (strcmp(data[0], gpgga) == 0) {
+      proc_gpgga(data);
+      return true;
+    }
+#ifdef DEBUG_GSV
+    else if (strcmp(data[0], gpgsv) == 0) {
+      proc_gpgsv(data, i);
+      return false;
+    }
+#endif
   }
   return false;
 }
@@ -233,6 +346,12 @@ void gps_rx(void)
   {
     OS_TIMER_START(gps_rx_timer, OS_TIMER_FOREVER);
   }
+#ifdef DEBUG_GSV
+  if (sats_status != SATS_DONE)
+  {
+    OS_TIMER_START(gps_rx_timer, OS_TIMER_FOREVER);
+  }
+#endif
 #ifdef DEBUG
   else
   {
@@ -276,6 +395,9 @@ void
 gps_prepare()
 {
   status |= STATUS_CONNECTED;
+#ifdef DEBUG_GSV
+  sats_status = SATS_START;
+#endif
 #ifdef DEBUG
   printf("gps status %02x\r\n", status);
 #endif
@@ -291,8 +413,13 @@ gps_prepare()
 TickType_t
 gps_data_ready()
 {
+#ifdef DEBUG_GSV
+  return (status & (STATUS_GPS_FIX_FOUND | STATUS_GPS_INFO_RECEIVED)) && \
+    sats_status == SATS_DONE ? 0 : OS_MS_2_TICKS(100);
+#else
   return status & (STATUS_GPS_FIX_FOUND | STATUS_GPS_INFO_RECEIVED) ? \
     0 : OS_MS_2_TICKS(100);
+#endif
 }
 
 int
