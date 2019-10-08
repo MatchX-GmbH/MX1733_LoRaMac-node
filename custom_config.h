@@ -45,8 +45,8 @@
  * To overcome this you need to hold the reset button and release as soon as
  * JTAG is trying to reach the chip.
  * */
-//#define dg_configIMAGE_SETUP                    PRODUCTION_MODE
-#define dg_configIMAGE_SETUP                    DEVELOPMENT_MODE
+#define dg_configIMAGE_SETUP                    PRODUCTION_MODE
+//#define dg_configIMAGE_SETUP                    DEVELOPMENT_MODE
 
 #if dg_configIMAGE_SETUP == PRODUCTION_MODE
 #define dg_configSKIP_MAGIC_CHECK_AT_START      (1)
