@@ -1,4 +1,4 @@
-PROJ=		minimal
+PROJ=		mx1733-loramac-node
 OBJDIR?=	obj
 SDKVER?=	1.0.14.1081
 SDKDIR?=	../DA1468x_DA15xxx_SDK_$(SDKVER)
