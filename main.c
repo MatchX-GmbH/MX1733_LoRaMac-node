@@ -95,7 +95,7 @@ sysinit_task_func(void *param)
   pm_set_wakeup_mode(true);
   /*
    * Be aware that pm_mode_extended_sleep as the
-   * sleeping modedoesn't work in DEVELOPMENT_MODE.
+   * sleeping mode doesn't work in DEVELOPMENT_MODE.
    * This is due to dg_configENABLE_DEBUGGER
    * in the config file. Therefore, always set
    * sleep mode to pm_mode_idle if debugging.
