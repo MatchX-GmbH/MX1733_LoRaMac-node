@@ -93,7 +93,20 @@ sysinit_task_func(void *param)
   retarget_init();
 #endif
   pm_set_wakeup_mode(true);
+  /*
+   * Be aware that pm_mode_extended_sleep as the
+   * sleeping modedoesn't work in DEVELOPMENT_MODE.
+   * This is due to dg_configENABLE_DEBUGGER
+   * in the config file. Therefore, always set
+   * sleep mode to pm_mode_idle if debugging.
+   * Only decide if you want extended sleep for
+   * production builds where debugging is not enabled.
+   * */
+#if (dg_configIMAGE_SETUP == DEVELOPMENT_MODE)
+  pm_set_sleep_mode(pm_mode_idle);
+#else
   pm_set_sleep_mode(INITIAL_SLEEP_MODE);
+#endif
   cm_sys_clk_set(sysclk_XTAL16M);
   // Create the main loop function and delete the other.
   OS_TASK_CREATE("LoRa Task", lora_task_func, (void *)0,
